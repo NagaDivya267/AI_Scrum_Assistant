@@ -12,12 +12,27 @@ csv_file = "sprint_data.csv"
 
 # Sidebar - API Key Setup
 st.sidebar.markdown("### ⚙️ Configuration")
-api_key = st.sidebar.text_input(
-    "Groq API Key", 
-    value=os.getenv("GROQ_API_KEY", ""),
+
+# Try to get API key from Streamlit secrets (for production), then from env vars, then ask user
+api_key = None
+try:
+    # For Streamlit Cloud deployment
+    api_key = st.secrets.get("GROQ_API_KEY", "")
+except:
+    # For local development
+    api_key = os.getenv("GROQ_API_KEY", "")
+
+# Allow user to override with sidebar input
+sidebar_input = st.sidebar.text_input(
+    "Groq API Key (optional override)", 
+    value="",
     type="password",
     help="Get your FREE API key from https://console.groq.com/keys"
 )
+
+if sidebar_input:
+    api_key = sidebar_input
+    os.environ["GROQ_API_KEY"] = api_key
 
 # Store API key in session
 if api_key:
