@@ -116,7 +116,6 @@ def calculate_metrics(df):
         "completion_rate": completion_rate,
         "risk_percentage": risk_percentage
     }
-
 def calculate_advanced_metrics(df):
     """Calculate advanced risk metrics for advisor-style UI"""
     base_metrics = calculate_metrics(df)
@@ -593,6 +592,74 @@ if df is not None:
         b2.metric("Blocked %", f"{metrics['blocker_pct']}%")
         b3.metric("Not Started %", f"{metrics['not_started_pct']}%")
         b4.metric("Velocity Gap %", f"{metrics['velocity_gap_pct']}%")
+
+        # --- PREDICTIVE KPIS ---
+        confidence_metrics = calculate_sprint_confidence(current_sprint_df)
+        velocity_metrics = get_velocity_metrics(current_sprint_df)
+
+        total_sp = metrics["total_sp"]
+        completed_sp = metrics["completed_sp"]
+        remaining_sp = metrics["remaining_sp"]
+        predicted_completion_sp = min(total_sp, completed_sp + velocity_metrics["avg_velocity"])
+
+        success_probability = (predicted_completion_sp / total_sp) * 100 if total_sp > 0 else 0
+        spillover_sp = max(0, total_sp - predicted_completion_sp)
+
+        active_df = current_sprint_df
+        blocked = len(active_df[active_df['Blocked'].astype(str).str.strip().str.lower() == 'yes'])
+        not_started = len(active_df[active_df['Status'].astype(str).str.strip().str.lower() == 'to do'])
+
+        remaining_pct = (remaining_sp / total_sp) * 100 if total_sp > 0 else 0
+        blocked_pct = (blocked / len(active_df)) * 100 if len(active_df) > 0 else 0
+        not_started_pct = (not_started / len(active_df)) * 100 if len(active_df) > 0 else 0
+
+        risk_index = (
+            0.4 * remaining_pct +
+            0.3 * blocked_pct +
+            0.3 * not_started_pct
+        )
+
+        avg_predictability = completed_health_df["Predictability %"].mean() if not completed_health_df.empty else confidence_metrics["current_completion"]
+        confidence_score = (
+            0.5 * avg_predictability -
+            0.2 * blocked_pct -
+            0.2 * remaining_pct
+        )
+
+        def get_traffic(conf):
+            if conf >= 85:
+                return "🟢 On Track"
+            if conf >= 60:
+                return "🟡 At Risk"
+            return "🔴 High Risk"
+
+        traffic_status = get_traffic(success_probability)
+
+        st.subheader("📊 Predictive KPIs")
+        p1, p2, p3, p4 = st.columns(4)
+        p1.metric("🚀 Success Probability", f"{round(success_probability, 2)}%")
+        p2.metric("📉 Spillover (SP)", round(spillover_sp, 2))
+        p3.metric("⚠️ Risk Index", round(risk_index, 2))
+        p4.metric("🎯 Confidence Score", round(confidence_score, 2))
+        st.caption(f"Traffic Status: {traffic_status}")
+
+        # --- VELOCITY TREND ---
+        st.subheader("📈 Velocity Trend")
+        if 'SprintStatus' in df.columns:
+            closed_df = df[df['SprintStatus'].astype(str).str.strip().str.lower() == 'closed'].copy()
+        else:
+            closed_sprint_names = list(completed_health_df["Sprint"]) if not completed_health_df.empty else []
+            closed_df = df[df['Sprint'].isin(closed_sprint_names)].copy()
+
+        if not closed_df.empty:
+            closed_df["StoryPoints"] = pd.to_numeric(closed_df["StoryPoints"], errors='coerce').fillna(0)
+            velocity_per_sprint = closed_df.groupby("Sprint")["StoryPoints"].sum()
+            velocity_per_sprint = velocity_per_sprint.reindex(
+                sorted(velocity_per_sprint.index, key=extract_sprint_number)
+            )
+            st.line_chart(velocity_per_sprint)
+        else:
+            st.info("No closed sprint data available for velocity trend.")
 
         # --- AI INSIGHTS ---
         st.subheader("🧠 AI Recommendations")
