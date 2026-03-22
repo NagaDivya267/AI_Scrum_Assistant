@@ -136,12 +136,22 @@ Be concise, data-driven, and focus on what matters most.
 {summary}"""
         
         with st.spinner("🧠 AI is analyzing your sprint data..."):
-            response = client.chat.completions.create(
-                model="llama-3.1-70b-versatile",  # Fast and powerful - replacing deprecated mixtral
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.7,
-                max_tokens=1500
-            )
+            try:
+                response = client.chat.completions.create(
+                    model="gemma-7b-it",  # Simple, stable, and fast
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.7,
+                    max_tokens=1500
+                )
+            except Exception as e:
+                # Fallback to another model if primary fails
+                st.warning(f"⚠️ Primary model busy, trying backup model...")
+                response = client.chat.completions.create(
+                    model="llama-3.1-8b-instant",
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.7,
+                    max_tokens=1500
+                )
         
         return response.choices[0].message.content
     
