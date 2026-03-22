@@ -643,24 +643,6 @@ if df is not None:
         p4.metric("🎯 Confidence Score", round(confidence_score, 2))
         st.caption(f"Traffic Status: {traffic_status}")
 
-        # --- VELOCITY TREND ---
-        st.subheader("📈 Velocity Trend")
-        if 'SprintStatus' in df.columns:
-            closed_df = df[df['SprintStatus'].astype(str).str.strip().str.lower() == 'closed'].copy()
-        else:
-            closed_sprint_names = list(completed_health_df["Sprint"]) if not completed_health_df.empty else []
-            closed_df = df[df['Sprint'].isin(closed_sprint_names)].copy()
-
-        if not closed_df.empty:
-            closed_df["StoryPoints"] = pd.to_numeric(closed_df["StoryPoints"], errors='coerce').fillna(0)
-            velocity_per_sprint = closed_df.groupby("Sprint")["StoryPoints"].sum()
-            velocity_per_sprint = velocity_per_sprint.reindex(
-                sorted(velocity_per_sprint.index, key=extract_sprint_number)
-            )
-            st.line_chart(velocity_per_sprint)
-        else:
-            st.info("No closed sprint data available for velocity trend.")
-
         # --- AI INSIGHTS ---
         st.subheader("🧠 AI Recommendations")
         if st.button("🚀 Generate Advisor Insights", key="generate_advisor_insights"):
