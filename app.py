@@ -159,12 +159,49 @@ Be concise, data-driven, and focus on what matters most.
         st.error(f"❌ Error calling Groq API: {str(e)}")
         return None
 
+def chat_with_ai(df, user_question):
+    """Chat with AI about sprint data and provide suggestions"""
+    if not os.getenv("GROQ_API_KEY"):
+        return None
+    
+    try:
+        client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+        
+        summary = prepare_llm_summary(df)
+        
+        prompt = f"""You are an expert Scrum Master helping teams solve problems and improve their sprints.
+
+SPRINT DATA CONTEXT:
+{summary}
+
+USER QUESTION: {user_question}
+
+Provide:
+1. **Direct Answer** - Address their question specifically
+2. **Problem Analysis** - What might be causing this issue
+3. **Team Suggestions** - 2-3 concrete actions the team can take now
+4. **Prevention Tips** - How to avoid this problem in future sprints
+
+Be concise, practical, and actionable. Focus on what helps the team most."""
+        
+        response = client.chat.completions.create(
+            model="gemma-7b-it",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7,
+            max_tokens=1000
+        )
+        
+        return response.choices[0].message.content
+    
+    except Exception as e:
+        return f"⚠️ Error: {str(e)}"
+
 # Read data
 df = read_from_csv()
 
 if df is not None:
-    # Create tabs with new AI Insights tab
-    tab1, tab2, tab3, tab4 = st.tabs(["📊 All Data", "📈 Sprint Summary", "🎯 Metrics", "🧠 AI Insights"])
+    # Create tabs with new AI Insights tab and Chat tab
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 All Data", "📈 Sprint Summary", "🎯 Metrics", "🧠 AI Insights", "💬 Chat"])
     
     # Tab 1: All Data
     with tab1:
@@ -276,6 +313,50 @@ if df is not None:
                 st.markdown(st.session_state.ai_insights)
             else:
                 st.info("💡 Click 'Generate AI Insights' to get AI-powered analysis of your sprint health, risks, and recommendations.")
+    
+    # Tab 5: Chat
+    with tab5:
+        st.subheader("💬 Chat with Sprint Assistant")
+        
+        if not os.getenv("GROQ_API_KEY"):
+            st.info("📝 Please enter your Groq API key in the sidebar (⚙️ Configuration) to use the chat.")
+        else:
+            st.markdown("""
+            **Ask me anything about your sprint!**
+            - "Why are we blocked on the Encryption Module?"
+            - "How can we improve our velocity?"
+            - "What should we do about the blocked items?"
+            - "Which sprint is at risk?"
+            """)
+            
+            # Initialize chat history in session state
+            if "chat_history" not in st.session_state:
+                st.session_state.chat_history = []
+            
+            # Display chat history
+            for message in st.session_state.chat_history:
+                with st.chat_message(message["role"]):
+                    st.markdown(message["content"])
+            
+            # Chat input
+            user_input = st.chat_input("Ask a question about your sprint...")
+            
+            if user_input:
+                # Add user message to history
+                st.session_state.chat_history.append({"role": "user", "content": user_input})
+                
+                # Display user message
+                with st.chat_message("user"):
+                    st.markdown(user_input)
+                
+                # Get AI response
+                with st.chat_message("assistant"):
+                    with st.spinner("🤔 Thinking..."):
+                        response = chat_with_ai(df, user_input)
+                        st.markdown(response)
+                    
+                    # Add assistant response to history
+                    st.session_state.chat_history.append({"role": "assistant", "content": response})
     
     st.markdown("---")
     st.markdown("*Last updated: Real-time from sprint_data.csv*")
