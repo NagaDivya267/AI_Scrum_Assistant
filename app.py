@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import csv
 import os
-from openai import OpenAI
+from groq import Groq
 
 # Page config
 st.set_page_config(page_title="AI Scrum Assistant", layout="wide", initial_sidebar_state="expanded")
@@ -13,18 +13,18 @@ csv_file = "sprint_data.csv"
 # Sidebar - API Key Setup
 st.sidebar.markdown("### ⚙️ Configuration")
 api_key = st.sidebar.text_input(
-    "OpenAI API Key", 
-    value=os.getenv("OPENAI_API_KEY", ""),
+    "Groq API Key", 
+    value=os.getenv("GROQ_API_KEY", ""),
     type="password",
-    help="Get your API key from https://platform.openai.com/api-keys"
+    help="Get your FREE API key from https://console.groq.com/keys"
 )
 
 # Store API key in session
 if api_key:
-    os.environ["OPENAI_API_KEY"] = api_key
-    st.sidebar.success("✅ API Key loaded")
+    os.environ["GROQ_API_KEY"] = api_key
+    st.sidebar.success("✅ Groq API Key loaded")
 else:
-    st.sidebar.warning("⚠️ Enter OpenAI API Key for AI insights")
+    st.sidebar.warning("⚠️ Enter Groq API Key for AI insights (FREE at https://console.groq.com)")
 
 # Title and header
 st.markdown("# 🚀 AI SCRUM ASSISTANT - with Predictive Analytics")
@@ -113,12 +113,12 @@ def prepare_llm_summary(df):
     return summary
 
 def generate_ai_insights(df):
-    """Generate AI-powered insights using OpenAI"""
-    if not os.getenv("OPENAI_API_KEY"):
+    """Generate AI-powered insights using Groq"""
+    if not os.getenv("GROQ_API_KEY"):
         return None
     
     try:
-        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        client = Groq(api_key=os.getenv("GROQ_API_KEY"))
         
         summary = prepare_llm_summary(df)
         
@@ -137,7 +137,7 @@ Be concise, data-driven, and focus on what matters most.
         
         with st.spinner("🧠 AI is analyzing your sprint data..."):
             response = client.chat.completions.create(
-                model="gpt-4o-mini",
+                model="mixtral-8x7b-32768",  # Fast and powerful open model
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.7,
                 max_tokens=1500
@@ -146,7 +146,7 @@ Be concise, data-driven, and focus on what matters most.
         return response.choices[0].message.content
     
     except Exception as e:
-        st.error(f"❌ Error calling OpenAI API: {str(e)}")
+        st.error(f"❌ Error calling Groq API: {str(e)}")
         return None
 
 # Read data
@@ -232,17 +232,24 @@ if df is not None:
     
     # Tab 4: AI Insights
     with tab4:
-        st.subheader("🧠 AI-Powered Sprint Analysis")
+        st.subheader("🧠 AI-Powered Sprint Analysis (Powered by Groq)")
         
         # Check if API key is configured
-        if not os.getenv("OPENAI_API_KEY"):
-            st.info("📝 Please enter your OpenAI API key in the sidebar (⚙️ Configuration) to enable AI insights.")
+        if not os.getenv("GROQ_API_KEY"):
+            st.info("📝 Please enter your Groq API key in the sidebar (⚙️ Configuration) to enable AI insights.")
             st.markdown("""
-            **Don't have an API key?**
-            1. Go to [OpenAI Platform](https://platform.openai.com/account/api-keys)
-            2. Sign up or log in
-            3. Create a new API key
-            4. Paste it in the Configuration panel on the left
+            **Get Your FREE Groq API Key (No payment method needed!):**
+            1. Go to [Groq Console](https://console.groq.com)
+            2. Sign up with your email or GitHub
+            3. Click "API Keys" in the left menu
+            4. Click "Create API Key"
+            5. Copy and paste it in the Configuration panel on the left
+            
+            **Why Groq?**
+            ✅ Completely FREE - No payment required
+            ✅ Super Fast - Instant analysis
+            ✅ Powerful Models - Mixtral, Llama2, and more
+            ✅ No Cost Limits - Generate unlimited insights
             """)
         else:
             col1, col2 = st.columns([3, 1])

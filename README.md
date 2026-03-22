@@ -19,36 +19,36 @@ An intelligent Sprint management tool powered by Streamlit and OpenAI's GPT mode
 - Automated risk detection
 - Root cause analysis
 - Predictive recommendations
-- Powered by OpenAI GPT-4o-mini
+- Powered by **Groq** - FREE, Fast, No payment required!
 
 ## Setup Instructions
 
 ### 1. Install Dependencies
 ```bash
-pip install streamlit pandas openai
+pip install streamlit pandas groq
 ```
 
-### 2. Get an OpenAI API Key
+### 2. Get a FREE Groq API Key (No payment method needed!)
 
-1. Visit [OpenAI Platform](https://platform.openai.com/account/api-keys)
-2. Sign up or log in to your account
-3. Click "Create new secret key"
-4. Copy your API key (starts with `sk-`)
+1. Visit [Groq Console](https://console.groq.com)
+2. Sign up with email or GitHub
+3. Click "API Keys" in the left menu
+4. Click "Create API Key"
+5. Copy your API key
 
 ### 3. Configure Your API Key
 
 **Option A: Sidebar Input (Recommended)**
 - Run the app: `streamlit run app.py`
-- Paste your API key in the "⚙️ Configuration" panel on the left
+- Paste your Groq API key in the "⚙️ Configuration" panel on the left
 - The key is stored in your session only (not saved)
 
 **Option B: Environment Variable (For Local Development)**
 1. Create/edit `.env` file in the project directory:
    ```
-   OPENAI_API_KEY=sk-your-api-key-here
+   GROQ_API_KEY=gsk_your-api-key-here
    ```
-2. Install python-dotenv: `pip install python-dotenv`
-3. The app will automatically load it
+2. The app will automatically load it
 
 ### 4. Run the App
 
@@ -108,25 +108,33 @@ Required columns:
 
 ## Cost Information
 
-OpenAI API usage is charged based on tokens consumed.
-- **GPT-4o-mini**: ~$0.15 per 1M input tokens, $0.60 per 1M output tokens
-- Average sprint analysis: 5-10 cents per request
-- **Free option**: Use sidebar to test without real API key
+**Groq is COMPLETELY FREE!**
+- ✅ No payment method required
+- ✅ No credit card needed
+- ✅ Unlimited API calls (generous free tier)
+- ✅ Super fast inference
+- ✅ Run as many sprint analyses as you want
 
 ## Troubleshooting
 
 ### "API Key not found" error
 - Make sure you've entered the key in the sidebar
-- Or set the `OPENAI_API_KEY` environment variable
+- Or set the `GROQ_API_KEY` environment variable
 - Restart the Streamlit app
+
+### "Invalid API key" error
+- Get your key from https://console.groq.com/keys
+- Make sure you copied the entire key
+- Try creating a new API key in the Groq console
 
 ### "CSV file not found" error
 - Ensure `sprint_data.csv` is in the same directory as `app.py`
 - Check the file path is correct
 
-### API rate limit error
-- Wait a few minutes before trying again
-- Check your OpenAI account usage at https://platform.openai.com/account/billing/limits
+### Groq is fast but sometimes slow?
+- Groq is free but popular - sometimes queue times happen
+- Wait a few seconds and try again
+- Check https://status.groq.com for service status
 
 ## File Structure
 
@@ -144,17 +152,17 @@ AI_Scrum_Assistant/
 
 1. ✅ Install requirements:
    ```bash
-   pip install streamlit pandas openai
+   pip install streamlit pandas groq
    ```
 
-2. ✅ Get your OpenAI API key from https://platform.openai.com/account/api-keys
+2. ✅ Get your FREE Groq API key from https://console.groq.com/keys
 
 3. ✅ Run the app:
    ```bash
    streamlit run app.py
    ```
 
-4. ✅ Enter your API key in the sidebar "⚙️ Configuration"
+4. ✅ Enter your Groq API key in the sidebar "⚙️ Configuration"
 
 5. ✅ Navigate to "🧠 AI Insights" tab and click "Generate AI Insights"
 
