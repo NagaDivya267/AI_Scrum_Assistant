@@ -293,6 +293,15 @@ def get_traffic_light(confidence):
     else:
         return "🔴", "High Risk"
 
+def get_color(value, good, medium):
+    """Return CSS color class based on value vs thresholds."""
+    if value >= good:
+        return "green"
+    elif value >= medium:
+        return "yellow"
+    else:
+        return "red"
+
 def calculate_sprint_confidence(df):
     """Calculate confidence in sprint goal completion based on velocity and current progress"""
     metrics = calculate_metrics(df)
@@ -544,6 +553,9 @@ if df is not None:
         st.subheader("🤖 AI Sprint Health Advisor")
         current_sprint_df, current_sprint_name = get_current_sprint_df(df)
 
+        # --- SPRINT METRICS ---
+        st.markdown("### 📊 Sprint Metrics")
+
         # --- COMPLETED SPRINT HEALTH ---
         st.subheader("🏁 Sprint Health Status (Completed Sprints)")
         completed_health_df = get_completed_sprint_health(df)
@@ -626,22 +638,91 @@ if df is not None:
             0.2 * remaining_pct
         )
 
-        def get_traffic(conf):
-            if conf >= 85:
-                return "🟢 On Track"
-            if conf >= 60:
-                return "🟡 At Risk"
-            return "🔴 High Risk"
+        # --- PREDICTIVE ANALYSIS ---
+        st.markdown("---")
+        st.markdown("### 🔮 Predictive Analysis")
 
-        traffic_status = get_traffic(success_probability)
+        st.markdown("""
+<style>
+.card {
+    padding: 20px;
+    border-radius: 12px;
+    color: white;
+    text-align: center;
+    font-size: 20px;
+    font-weight: bold;
+}
+.green { background-color: #28a745; }
+.yellow { background-color: #ffc107; color: black; }
+.red { background-color: #dc3545; }
+</style>
+""", unsafe_allow_html=True)
 
-        st.subheader("📊 Predictive KPIs")
-        p1, p2, p3, p4 = st.columns(4)
-        p1.metric("🚀 Success Probability", f"{round(success_probability, 2)}%")
-        p2.metric("📉 Spillover (SP)", round(spillover_sp, 2))
-        p3.metric("⚠️ Risk Index", round(risk_index, 2))
-        p4.metric("🎯 Confidence Score", round(confidence_score, 2))
-        st.caption(f"Traffic Status: {traffic_status}")
+        st.subheader("📊 Predictive KPI Dashboard")
+
+        col1, col2, col3, col4 = st.columns(4)
+
+        color1 = get_color(success_probability, 85, 60)
+        col1.markdown(f"""
+<div class="card {color1}">
+    🚀 {round(success_probability,2)}% <br>
+    Success Probability
+</div>
+""", unsafe_allow_html=True)
+
+        color2 = "red" if spillover_sp > 5 else "green"
+        col2.markdown(f"""
+<div class="card {color2}">
+    📉 {round(spillover_sp,2)} SP <br>
+    Spillover
+</div>
+""", unsafe_allow_html=True)
+
+        color3 = "green" if risk_index < 30 else "yellow" if risk_index < 60 else "red"
+        col3.markdown(f"""
+<div class="card {color3}">
+    ⚠️ {round(risk_index,2)} <br>
+    Risk Index
+</div>
+""", unsafe_allow_html=True)
+
+        color4 = get_color(confidence_score, 75, 50)
+        col4.markdown(f"""
+<div class="card {color4}">
+    🎯 {round(confidence_score,2)}% <br>
+    Confidence Score
+</div>
+""", unsafe_allow_html=True)
+
+        # --- SPRINT HEALTH INDICATOR ---
+        st.subheader("🚦 Sprint Health Indicator")
+
+        if success_probability >= 85:
+            indicator_color = "#28a745"
+            indicator_text = "🟢 ON TRACK"
+            text_color = "white"
+        elif success_probability >= 60:
+            indicator_color = "#ffc107"
+            indicator_text = "🟡 AT RISK"
+            text_color = "black"
+        else:
+            indicator_color = "#dc3545"
+            indicator_text = "🔴 HIGH RISK"
+            text_color = "white"
+
+        st.markdown(f"""
+<div style="
+    background-color:{indicator_color};
+    padding:30px;
+    border-radius:15px;
+    text-align:center;
+    font-size:28px;
+    font-weight:bold;
+    color:{text_color};">
+    {indicator_text} <br>
+    {round(success_probability,2)}% Confidence
+</div>
+""", unsafe_allow_html=True)
 
         # --- AI INSIGHTS ---
         st.subheader("🧠 AI Recommendations")
