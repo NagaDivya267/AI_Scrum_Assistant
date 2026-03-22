@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import csv
 import os
+import re
 from groq import Groq
 
 # Page config
@@ -100,7 +101,7 @@ def calculate_metrics(df):
     total_completed = sum(s["Done"] for s in sprints_summary.values())
     total_in_progress = sum(s["In Progress"] for s in sprints_summary.values())
     total_todo = sum(s["To Do"] for s in sprints_summary.values())
-    blocked_count = len(df[df['Blocked'] == 'Yes'])
+    blocked_count = len(df[df['Blocked'].astype(str).str.strip().str.lower() == 'yes'])
     
     completion_rate = (total_completed / total_story_points * 100) if total_story_points > 0 else 0
     risk_percentage = ((total_in_progress + total_todo) / total_story_points * 100) if total_story_points > 0 else 0
@@ -148,6 +149,30 @@ def get_risk_status(risk_percentage):
         return f"🟡 Medium Risk ({risk_percentage:.1f}%) - Sprint needs close monitoring"
     return f"🟢 Low Risk ({risk_percentage:.1f}%) - Sprint is in a healthy range"
 
+def extract_sprint_number(sprint_name):
+    """Extract sprint number for natural sorting of sprint labels."""
+    match = re.search(r"(\d+)", str(sprint_name))
+    return int(match.group(1)) if match else -1
+
+def get_current_sprint_name(df):
+    """Return current sprint name, preferring SprintStatus=Active when available."""
+    if 'SprintStatus' in df.columns:
+        active_df = df[df['SprintStatus'].astype(str).str.strip().str.lower() == 'active']
+        if not active_df.empty:
+            active_sprints = sorted(active_df['Sprint'].dropna().astype(str).unique(), key=extract_sprint_number)
+            if active_sprints:
+                return active_sprints[-1]
+
+    sprint_names = sorted(df['Sprint'].dropna().astype(str).unique(), key=extract_sprint_number)
+    return sprint_names[-1] if sprint_names else None
+
+def get_current_sprint_df(df):
+    """Return DataFrame filtered to current sprint and its sprint name."""
+    current_sprint_name = get_current_sprint_name(df)
+    if not current_sprint_name:
+        return df, None
+    return df[df['Sprint'] == current_sprint_name], current_sprint_name
+
 def calculate_sprint_health(committed_sp, completed_sp, added_sp, prod_defects, total_defects):
     """Calculate sprint health score for a completed sprint."""
     if committed_sp <= 0:
@@ -193,20 +218,27 @@ def sum_optional_numeric(sprint_df, column_candidates):
 
 def get_completed_sprint_health(df):
     """Build sprint health metrics for completed sprints only."""
-    sprints_summary = get_sprint_summary(df)
     health_rows = []
 
-    for sprint_name, stats in sorted(sprints_summary.items()):
-        committed_sp = stats.get("Total", 0)
-        completed_sp = stats.get("Done", 0)
-        in_progress_sp = stats.get("In Progress", 0)
-        todo_sp = stats.get("To Do", 0)
+    if 'SprintStatus' in df.columns:
+        completed_sprint_names = sorted(
+            df[df['SprintStatus'].astype(str).str.strip().str.lower() == 'closed']['Sprint'].dropna().astype(str).unique(),
+            key=extract_sprint_number
+        )
+    else:
+        current_sprint_name = get_current_sprint_name(df)
+        completed_sprint_names = sorted(df['Sprint'].dropna().astype(str).unique(), key=extract_sprint_number)
+        if current_sprint_name in completed_sprint_names:
+            completed_sprint_names.remove(current_sprint_name)
 
-        is_completed_sprint = committed_sp > 0 and in_progress_sp == 0 and todo_sp == 0
-        if not is_completed_sprint:
-            continue
-
+    for sprint_name in completed_sprint_names:
         sprint_df = df[df['Sprint'] == sprint_name]
+        committed_sp = pd.to_numeric(sprint_df['StoryPoints'], errors='coerce').fillna(0).sum()
+        completed_sp = pd.to_numeric(
+            sprint_df[sprint_df['Status'].astype(str).str.strip().str.lower() == 'done']['StoryPoints'],
+            errors='coerce'
+        ).fillna(0).sum()
+
         added_sp = sum_optional_numeric(sprint_df, ["AddedSP", "Added_SP", "ScopeAddedSP"])
         prod_defects = sum_optional_numeric(sprint_df, ["ProdDefects", "ProductionDefects", "Prod_Defects"])
         total_defects = sum_optional_numeric(sprint_df, ["TotalDefects", "Defects", "Total_Defects"])
@@ -511,6 +543,7 @@ if df is not None:
     # Tab 3: Metrics
     with tab3:
         st.subheader("🤖 AI Sprint Health Advisor")
+        current_sprint_df, current_sprint_name = get_current_sprint_df(df)
 
         # --- COMPLETED SPRINT HEALTH ---
         st.subheader("🏁 Sprint Health Status (Completed Sprints)")
@@ -536,7 +569,8 @@ if df is not None:
             st.info("No completed sprints found yet. Sprint health status will appear once a sprint reaches 100% completion.")
 
         # --- METRICS ---
-        metrics = calculate_advanced_metrics(df)
+        st.subheader(f"🚦 Current Sprint Health Status ({current_sprint_name})" if current_sprint_name else "🚦 Current Sprint Health Status")
+        metrics = calculate_advanced_metrics(current_sprint_df)
 
         col1, col2, col3, col4 = st.columns(4)
         col1.metric("Total SP", metrics["total_sp"])
@@ -545,7 +579,7 @@ if df is not None:
         col4.metric("Risk %", f"{metrics['risk']}%")
 
         # --- RISK STATUS ---
-        st.subheader("🚦 Sprint Health Status")
+        st.subheader("📍 Current Sprint Risk Status")
         status = get_risk_status(metrics["risk"])
 
         if "High Risk" in status:
@@ -566,7 +600,7 @@ if df is not None:
         # --- AI INSIGHTS ---
         st.subheader("🧠 AI Recommendations")
         if st.button("🚀 Generate Advisor Insights", key="generate_advisor_insights"):
-            insights = generate_ai_insights(df)
+            insights = generate_ai_insights(current_sprint_df)
             if insights:
                 st.session_state.ai_insights = insights
 
