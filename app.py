@@ -79,6 +79,60 @@ def calculate_metrics(df):
         "risk_percentage": risk_percentage
     }
 
+def get_velocity_metrics(df):
+    """Calculate velocity-based metrics across sprints"""
+    sprints_summary = get_sprint_summary(df)
+    
+    # Calculate velocity (completed story points) per sprint
+    sprint_velocities = []
+    for sprint_name, stats in sorted(sprints_summary.items()):
+        sprint_velocities.append(stats['Done'])
+    
+    if len(sprint_velocities) > 0:
+        avg_velocity = sum(sprint_velocities) / len(sprint_velocities)
+    else:
+        avg_velocity = 0
+    
+    return {
+        "avg_velocity": avg_velocity,
+        "velocities": sprint_velocities,
+        "velocity_trend": "Stable" if len(sprint_velocities) <= 1 else ("📈 Improving" if sprint_velocities[-1] > avg_velocity else "📉 Declining" if sprint_velocities[-1] < avg_velocity else "➡️ Stable")
+    }
+
+def get_traffic_light(confidence):
+    """Return traffic light emoji and status based on confidence percentage"""
+    if confidence >= 85:
+        return "🟢", "On Track"
+    elif confidence >= 60:
+        return "🟡", "At Risk"
+    else:
+        return "🔴", "High Risk"
+
+def calculate_sprint_confidence(df):
+    """Calculate confidence in sprint goal completion based on velocity and current progress"""
+    metrics = calculate_metrics(df)
+    velocity_metrics = get_velocity_metrics(df)
+    
+    # Current completion rate
+    current_completion = metrics['completion_rate']
+    
+    # Velocity-based prediction (assuming avg velocity continues)
+    # Predict: completed + (avg_velocity on remaining work) 
+    if metrics['total_sp'] > 0:
+        # Simplified: ratio of avg velocity to total story points
+        velocity_factor = (velocity_metrics['avg_velocity'] / metrics['total_sp']) * 100
+        # Blend current progress with velocity trend
+        predicted_completion = current_completion + (velocity_factor * 0.3)  # 30% weight for velocity
+        predicted_completion = min(predicted_completion, 100)  # Cap at 100%
+    else:
+        predicted_completion = 0
+    
+    return {
+        "current_completion": current_completion,
+        "predicted_completion": predicted_completion,
+        "confidence": predicted_completion
+    }
+
 def prepare_llm_summary(df):
     """Prepare sprint data summary for LLM analysis"""
     metrics = calculate_metrics(df)
@@ -248,42 +302,150 @@ if df is not None:
     
     # Tab 3: Metrics
     with tab3:
-        st.subheader("Key Metrics")
+        # Create subtabs for Current vs Predictive Metrics
+        metrics_tab1, metrics_tab2 = st.tabs(["📊 Current Metrics", "🔮 Predictive Analytics"])
         
-        # Calculate overall metrics
-        sprints_summary = get_sprint_summary(df)
-        total_story_points = sum(s["Total"] for s in sprints_summary.values())
-        total_completed = sum(s["Done"] for s in sprints_summary.values())
-        total_in_progress = sum(s["In Progress"] for s in sprints_summary.values())
-        total_todo = sum(s["To Do"] for s in sprints_summary.values())
+        with metrics_tab1:
+            st.subheader("Current Sprint Metrics")
+            
+            # Calculate overall metrics
+            sprints_summary = get_sprint_summary(df)
+            total_story_points = sum(s["Total"] for s in sprints_summary.values())
+            total_completed = sum(s["Done"] for s in sprints_summary.values())
+            total_in_progress = sum(s["In Progress"] for s in sprints_summary.values())
+            total_todo = sum(s["To Do"] for s in sprints_summary.values())
+            
+            m1, m2, m3, m4 = st.columns(4)
+            with m1:
+                st.metric("Total Story Points", total_story_points)
+            with m2:
+                st.metric("Completed", f"{total_completed}/{total_story_points}")
+            with m3:
+                st.metric("In Progress", total_in_progress)
+            with m4:
+                st.metric("To Do", total_todo)
+            
+            # Completion rate
+            overall_completion = (total_completed / total_story_points * 100) if total_story_points > 0 else 0
+            st.metric("Overall Completion Rate", f"{overall_completion:.1f}%")
+            
+            # Status distribution
+            st.subheader("Status Distribution")
+            status_count = df['Status'].value_counts()
+            st.bar_chart(status_count)
+            
+            # Blocked items
+            st.subheader("Blocked Items")
+            blocked_df = df[df['Blocked'] == 'Yes']
+            if len(blocked_df) > 0:
+                st.warning(f"⚠️ {len(blocked_df)} items are blocked")
+                st.dataframe(blocked_df[['Sprint', 'Story', 'Status', 'StoryPoints']], width='stretch')
+            else:
+                st.success("✅ No blocked items")
         
-        m1, m2, m3, m4 = st.columns(4)
-        with m1:
-            st.metric("Total Story Points", total_story_points)
-        with m2:
-            st.metric("Completed", f"{total_completed}/{total_story_points}")
-        with m3:
-            st.metric("In Progress", total_in_progress)
-        with m4:
-            st.metric("To Do", total_todo)
-        
-        # Completion rate
-        overall_completion = (total_completed / total_story_points * 100) if total_story_points > 0 else 0
-        st.metric("Overall Completion Rate", f"{overall_completion:.1f}%")
-        
-        # Status distribution
-        st.subheader("Status Distribution")
-        status_count = df['Status'].value_counts()
-        st.bar_chart(status_count)
-        
-        # Blocked items
-        st.subheader("Blocked Items")
-        blocked_df = df[df['Blocked'] == 'Yes']
-        if len(blocked_df) > 0:
-            st.warning(f"⚠️ {len(blocked_df)} items are blocked")
-            st.dataframe(blocked_df[['Sprint', 'Story', 'Status', 'StoryPoints']], width='stretch')
-        else:
-            st.success("✅ No blocked items")
+        with metrics_tab2:
+            st.subheader("🔮 Predictive Metrics & Sprint Goal Confidence")
+            
+            # Get prediction metrics
+            confidence_metrics = calculate_sprint_confidence(df)
+            velocity_metrics = get_velocity_metrics(df)
+            metrics = calculate_metrics(df)
+            
+            # Current completion and prediction row
+            pred_col1, pred_col2, pred_col3 = st.columns(3)
+            
+            with pred_col1:
+                current = confidence_metrics['current_completion']
+                st.metric(
+                    "📊 Current Completion",
+                    f"{round(current, 2)}%"
+                )
+            
+            with pred_col2:
+                predicted = confidence_metrics['predicted_completion']
+                delta_val = round(predicted - current, 2)
+                st.metric(
+                    "🚀 Predicted Completion",
+                    f"{round(predicted, 2)}%",
+                    delta=f"{delta_val}% trend"
+                )
+            
+            with pred_col3:
+                icon, status = get_traffic_light(confidence_metrics['confidence'])
+                st.metric(
+                    f"{icon} Goal Status",
+                    status,
+                    delta=f"{round(confidence_metrics['confidence'], 2)}% confidence"
+                )
+            
+            # Velocity Analysis Section
+            st.markdown("---")
+            st.subheader("⚡ Velocity Analysis")
+            
+            vel_col1, vel_col2, vel_col3 = st.columns(3)
+            
+            with vel_col1:
+                st.metric(
+                    "📈 Avg Velocity (Past Sprints)",
+                    f"{round(velocity_metrics['avg_velocity'], 2)} pts"
+                )
+            
+            with vel_col2:
+                st.metric(
+                    "🎯 Velocity-Based Forecast",
+                    f"{round(velocity_metrics['avg_velocity'] * 1.1, 2)} pts",  # 1.1x for optimistic forecast
+                    delta="Next sprint estimate"
+                )
+            
+            with vel_col3:
+                st.metric(
+                    "📊 Velocity Trend",
+                    velocity_metrics['velocity_trend']
+                )
+            
+            # Sprint Goal Confidence Section
+            st.markdown("---")
+            st.subheader("🎯 Sprint Goal Confidence")
+            
+            confidence_val = confidence_metrics['confidence']
+            icon, status_text = get_traffic_light(confidence_val)
+            
+            # Display traffic light status prominently
+            st.info(f"### {icon} {status_text} - {round(confidence_val, 2)}% Confidence")
+            
+            # Confidence threshold visualization
+            confidence_col1, confidence_col2 = st.columns([2, 1])
+            
+            with confidence_col1:
+                # Progress bar for confidence
+                st.write("**Confidence Level Breakdown:**")
+                if confidence_val >= 85:
+                    st.success(f"🟢 HIGH CONFIDENCE ({round(confidence_val, 2)}%) - Team is on track to meet sprint goals")
+                elif confidence_val >= 60:
+                    st.warning(f"🟡 MEDIUM CONFIDENCE ({round(confidence_val, 2)}%) - Some risks identified, attention needed")
+                else:
+                    st.error(f"🔴 LOW CONFIDENCE ({round(confidence_val, 2)}%) - High risk of missing sprint goals")
+            
+            with confidence_col2:
+                st.metric("Risk Level", "HIGH" if confidence_val < 60 else "MEDIUM" if confidence_val < 85 else "LOW")
+            
+            # Key metrics affecting confidence
+            st.markdown("---")
+            st.subheader("📊 Key Factors Affecting Delivery")
+            
+            factors_col1, factors_col2, factors_col3, factors_col4 = st.columns(4)
+            
+            with factors_col1:
+                st.metric("Blocked Items", f"{metrics['blocked_count']}")
+                
+            with factors_col2:
+                st.metric("In Progress", f"{metrics['in_progress_sp']} pts")
+                
+            with factors_col3:
+                st.metric("To Do", f"{metrics['todo_sp']} pts")
+                
+            with factors_col4:
+                st.metric("Risk ⚠️", f"{round(metrics['risk_percentage'], 1)}%")
     
     # Tab 4: AI Insights
     with tab4:
