@@ -27,21 +27,26 @@ except Exception:
 if not api_key:
     api_key = os.getenv("GROQ_API_KEY", "")
 
-# Allow user to override with sidebar input
-sidebar_input = st.sidebar.text_input(
-    "Groq API Key", 
-    value=api_key if api_key else "",
-    type="password",
-    help="Get your FREE API key from https://console.groq.com/keys"
-)
-
-if sidebar_input:
-    api_key = sidebar_input
+# Allow user to override with sidebar input ONLY if no API key is configured
+if not api_key:
+    sidebar_input = st.sidebar.text_input(
+        "Groq API Key", 
+        value="",
+        type="password",
+        help="Get your FREE API key from https://console.groq.com/keys"
+    )
+    
+    if sidebar_input:
+        api_key = sidebar_input
+else:
+    # API key is already configured, show success message
+    st.sidebar.text("✅ API Key: Configured")
 
 # Set environment variable for API calls
 if api_key:
     os.environ["GROQ_API_KEY"] = api_key
-    st.sidebar.success("✅ Groq API Key loaded")
+    if not api_key == os.getenv("GROQ_API_KEY"):  # Only show if newly entered
+        st.sidebar.success("✅ Groq API Key loaded")
 else:
     st.sidebar.error("❌ No Groq API Key found")
     st.sidebar.info("""
@@ -50,8 +55,8 @@ else:
     1. Go to https://console.groq.com/keys
     2. Sign up (takes 1 minute)
     3. Create an API key
-    4. In Streamlit Cloud: Settings > Secrets > Add `GROQ_API_KEY = "your_key"`
-    5. Or paste it above in the Configuration box
+    4. Paste it in the box above
+    5. Or contact admin to configure it in Streamlit Cloud Secrets
     """)
 
 # Title and header
