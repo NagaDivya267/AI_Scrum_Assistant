@@ -137,7 +137,7 @@ Be concise, data-driven, and focus on what matters most.
         
         with st.spinner("🧠 AI is analyzing your sprint data..."):
             response = client.chat.completions.create(
-                model="mixtral-8x7b-32768",  # Fast and powerful open model
+                model="llama-3.1-70b-versatile",  # Fast and powerful - replacing deprecated mixtral
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.7,
                 max_tokens=1500
