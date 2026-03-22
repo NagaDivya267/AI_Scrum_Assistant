@@ -357,6 +357,26 @@ if df is not None:
                     
                     # Add assistant response to history
                     st.session_state.chat_history.append({"role": "assistant", "content": response})
+            
+            # Add separator
+            st.divider()
+            
+            # Simple Q&A Interface
+            st.subheader("⚡ Quick Question & Answer")
+            st.markdown("*Get instant answers without chat history*")
+            
+            col1, col2 = st.columns([4, 1])
+            with col1:
+                user_question = st.text_input("Ask a question about your sprint:")
+            
+            with col2:
+                ask_button = st.button("🚀 Ask AI", use_container_width=True)
+            
+            if ask_button and user_question:
+                st.write("🤖 **Answer:**")
+                with st.spinner("🔍 Analyzing your sprint..."):
+                    answer = chat_with_ai(df, user_question)
+                    st.markdown(answer)
     
     st.markdown("---")
     st.markdown("*Last updated: Real-time from sprint_data.csv*")
