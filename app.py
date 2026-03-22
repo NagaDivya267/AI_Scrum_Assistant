@@ -13,6 +13,10 @@ csv_file = "sprint_data.csv"
 # Sidebar - API Key Setup
 st.sidebar.markdown("### ⚙️ Configuration")
 
+# Sidebar - Data Source
+st.sidebar.markdown("### 📁 Sprint Data")
+uploaded_file = st.sidebar.file_uploader("Upload Sprint CSV", type=["csv"])
+
 # Try to get API key from Streamlit secrets (for production), then from env vars
 api_key = None
 
@@ -111,6 +115,38 @@ def calculate_metrics(df):
         "completion_rate": completion_rate,
         "risk_percentage": risk_percentage
     }
+
+def calculate_advanced_metrics(df):
+    """Calculate advanced risk metrics for advisor-style UI"""
+    base_metrics = calculate_metrics(df)
+    velocity_metrics = get_velocity_metrics(df)
+
+    total_sp = base_metrics["total_sp"]
+    total_items = len(df)
+
+    remaining_pct = (base_metrics["remaining_sp"] / total_sp * 100) if total_sp > 0 else 0
+    blocker_pct = (base_metrics["blocked_count"] / total_items * 100) if total_items > 0 else 0
+    not_started_pct = (base_metrics["todo_sp"] / total_sp * 100) if total_sp > 0 else 0
+    velocity_gap_pct = ((base_metrics["remaining_sp"] - velocity_metrics["avg_velocity"]) / total_sp * 100) if total_sp > 0 else 0
+
+    return {
+        "total_sp": base_metrics["total_sp"],
+        "completed_sp": base_metrics["completed_sp"],
+        "remaining_sp": base_metrics["remaining_sp"],
+        "risk": round(base_metrics["risk_percentage"], 1),
+        "remaining_pct": round(remaining_pct, 1),
+        "blocker_pct": round(blocker_pct, 1),
+        "not_started_pct": round(not_started_pct, 1),
+        "velocity_gap_pct": round(velocity_gap_pct, 1)
+    }
+
+def get_risk_status(risk_percentage):
+    """Return human-readable risk status for sprint health"""
+    if risk_percentage >= 60:
+        return f"🔴 High Risk ({risk_percentage:.1f}%) - Sprint is at significant delivery risk"
+    if risk_percentage >= 35:
+        return f"🟡 Medium Risk ({risk_percentage:.1f}%) - Sprint needs close monitoring"
+    return f"🟢 Low Risk ({risk_percentage:.1f}%) - Sprint is in a healthy range"
 
 def get_velocity_metrics(df):
     """Calculate velocity-based metrics across sprints"""
@@ -334,8 +370,19 @@ Be concise, practical, and focused on what matters most for sprint success."""
     except Exception as e:
         return f"⚠️ Error: {str(e)}"
 
-# Read data
-df = read_from_csv()
+# Read data from uploaded file (if available), else fallback to default CSV
+df = None
+if uploaded_file is not None:
+    try:
+        df = pd.read_csv(uploaded_file)
+        st.sidebar.success("✅ Using uploaded sprint data")
+    except Exception as e:
+        st.sidebar.error(f"❌ Upload error: {e}")
+
+if df is None:
+    df = read_from_csv()
+    if df is not None:
+        st.sidebar.info("ℹ️ Using default sprint_data.csv")
 
 if df is not None:
     # Create tabs with new AI Insights tab and Chat tab
@@ -378,134 +425,65 @@ if df is not None:
     
     # Tab 3: Metrics
     with tab3:
-        # Create subtabs for Current vs Predictive Metrics
-        metrics_tab1, metrics_tab2 = st.tabs(["📊 Current Metrics", "🔮 Predictive Analytics"])
-        
-        with metrics_tab1:
-            st.subheader("Current Sprint Metrics")
-            
-            # Calculate overall metrics
-            sprints_summary = get_sprint_summary(df)
-            total_story_points = sum(s["Total"] for s in sprints_summary.values())
-            total_completed = sum(s["Done"] for s in sprints_summary.values())
-            total_in_progress = sum(s["In Progress"] for s in sprints_summary.values())
-            total_todo = sum(s["To Do"] for s in sprints_summary.values())
-            
-            m1, m2, m3, m4 = st.columns(4)
-            with m1:
-                st.metric("Total Story Points", total_story_points)
-            with m2:
-                st.metric("Completed", f"{total_completed}/{total_story_points}")
-            with m3:
-                st.metric("In Progress", total_in_progress)
-            with m4:
-                st.metric("To Do", total_todo)
-            
-            # Completion rate
-            overall_completion = (total_completed / total_story_points * 100) if total_story_points > 0 else 0
-            st.metric("Overall Completion Rate", f"{overall_completion:.1f}%")
-            
-            # Status distribution
-            st.subheader("Status Distribution")
-            status_count = df['Status'].value_counts()
-            st.bar_chart(status_count)
-            
-            # Blocked items
-            st.subheader("Blocked Items")
-            blocked_df = df[df['Blocked'] == 'Yes']
-            if len(blocked_df) > 0:
-                st.warning(f"⚠️ {len(blocked_df)} items are blocked")
-                st.dataframe(blocked_df[['Sprint', 'Story', 'Status', 'StoryPoints']], width='stretch')
-            else:
-                st.success("✅ No blocked items")
-        
-        with metrics_tab2:
-            st.subheader("🔮 Predictive Metrics & Sprint Goal Confidence")
-            
-            # Get prediction metrics
-            confidence_metrics = calculate_sprint_confidence(df)
-            velocity_metrics = get_velocity_metrics(df)
-            metrics = calculate_metrics(df)
-            
-            # Current completion and prediction row
-            pred_col1, pred_col2, pred_col3 = st.columns(3)
-            
-            with pred_col1:
-                current = confidence_metrics['current_completion']
-                st.metric(
-                    "📊 Current Completion",
-                    f"{round(current, 2)}%"
-                )
-            
-            with pred_col2:
-                predicted = confidence_metrics['predicted_completion']
-                delta_val = round(predicted - current, 2)
-                st.metric(
-                    "🚀 Predicted Completion",
-                    f"{round(predicted, 2)}%",
-                    delta=f"{delta_val}% trend"
-                )
-            
-            with pred_col3:
-                icon, status = get_traffic_light(confidence_metrics['confidence'])
-                st.metric(
-                    f"{icon} Goal Status",
-                    status,
-                    delta=f"{round(confidence_metrics['confidence'], 2)}% confidence"
-                )
-            
-            # Velocity Analysis Section
-            st.markdown("---")
-            st.subheader("⚡ Velocity Analysis")
-            
-            vel_col1, vel_col2, vel_col3 = st.columns(3)
-            
-            with vel_col1:
-                st.metric(
-                    "📈 Avg Velocity (Past Sprints)",
-                    f"{round(velocity_metrics['avg_velocity'], 2)} pts"
-                )
-            
-            with vel_col2:
-                st.metric(
-                    "🎯 Velocity-Based Forecast",
-                    f"{round(velocity_metrics['avg_velocity'] * 1.1, 2)} pts",  # 1.1x for optimistic forecast
-                    delta="Next sprint estimate"
-                )
-            
-            with vel_col3:
-                st.metric(
-                    "📊 Velocity Trend",
-                    velocity_metrics['velocity_trend']
-                )
-            
-            # Sprint Goal Confidence Section
-            st.markdown("---")
-            st.subheader("🎯 Sprint Goal Confidence")
-            
-            confidence_val = confidence_metrics['confidence']
-            icon, status_text = get_traffic_light(confidence_val)
-            
-            # Display traffic light status prominently
-            st.info(f"### {icon} {status_text} - {round(confidence_val, 2)}% Confidence")
-            
-            # Key metrics affecting confidence
-            st.markdown("---")
-            st.subheader("📊 Key Factors Affecting Delivery")
-            
-            factors_col1, factors_col2, factors_col3, factors_col4 = st.columns(4)
-            
-            with factors_col1:
-                st.metric("Blocked Items", f"{metrics['blocked_count']}")
-                
-            with factors_col2:
-                st.metric("In Progress", f"{metrics['in_progress_sp']} pts")
-                
-            with factors_col3:
-                st.metric("To Do", f"{metrics['todo_sp']} pts")
-                
-            with factors_col4:
-                st.metric("Risk ⚠️", f"{round(metrics['risk_percentage'], 1)}%")
+        st.subheader("🤖 AI Sprint Health Advisor")
+
+        # --- OVERVIEW ---
+        st.subheader("📊 Sprint Overview")
+        preview_cols = ["Sprint", "Story", "Status", "StoryPoints", "Blocked"]
+        available_cols = [col for col in preview_cols if col in df.columns]
+        if available_cols:
+            st.dataframe(df[available_cols], width='stretch', height=280)
+        else:
+            st.dataframe(df, width='stretch', height=280)
+
+        # --- METRICS ---
+        metrics = calculate_advanced_metrics(df)
+
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("Total SP", metrics["total_sp"])
+        col2.metric("Completed SP", metrics["completed_sp"])
+        col3.metric("Remaining SP", metrics["remaining_sp"])
+        col4.metric("Risk %", f"{metrics['risk']}%")
+
+        # --- RISK STATUS ---
+        st.subheader("🚦 Sprint Health Status")
+        status = get_risk_status(metrics["risk"])
+
+        if "High Risk" in status:
+            st.error(status)
+        elif "Medium Risk" in status:
+            st.warning(status)
+        else:
+            st.success(status)
+
+        # --- BREAKDOWN ---
+        st.subheader("📉 Risk Breakdown")
+        b1, b2, b3, b4 = st.columns(4)
+        b1.metric("Remaining Work %", f"{metrics['remaining_pct']}%")
+        b2.metric("Blocked %", f"{metrics['blocker_pct']}%")
+        b3.metric("Not Started %", f"{metrics['not_started_pct']}%")
+        b4.metric("Velocity Gap %", f"{metrics['velocity_gap_pct']}%")
+
+        # --- AI INSIGHTS ---
+        st.subheader("🧠 AI Recommendations")
+        if st.button("🚀 Generate Advisor Insights", key="generate_advisor_insights"):
+            insights = generate_ai_insights(df)
+            if insights:
+                st.session_state.ai_insights = insights
+
+        if "ai_insights" in st.session_state and st.session_state.ai_insights:
+            st.markdown(st.session_state.ai_insights)
+        else:
+            st.info("💡 Generate insights to see targeted Scrum Master recommendations.")
+
+        # --- WHAT IF SIMULATION ---
+        st.subheader("🔮 What-If Analysis")
+        extra_sp = st.slider("If additional SP completed today:", 0, 20, 5, key="what_if_sp")
+
+        simulated_remaining = max(0, metrics["remaining_sp"] - extra_sp)
+        simulated_risk = (simulated_remaining / metrics["total_sp"] * 100) if metrics["total_sp"] > 0 else 0
+
+        st.info(f"👉 New Risk: {round(simulated_risk, 2)}%")
     
     # Tab 4: AI Insights
     with tab4:
