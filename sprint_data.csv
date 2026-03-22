@@ -1,25 +1,29 @@
-Sprint,Story,Status,StoryPoints,Blocked
-Sprint 1,Login API,Done,5,No
-Sprint 1,Payment API,Done,8,No
-Sprint 1,Security Patch,Done,13,No
-Sprint 1,Encryption Module,In Progress,8,Yes
-Sprint 2,Login API,Done,5,No
-Sprint 2,Payment API,Done,8,No
-Sprint 2,Security Patch,To Do,13,No
-Sprint 2,Encryption Module,To Do,8,No
-Sprint 3,Login API,Done,5,No
-Sprint 3,Payment API,In Progress,8,Yes
-Sprint 3,Security Patch,To Do,13,No
-Sprint 3,Encryption Module,To Do,8,No
-Sprint 4,Login API,Done,5,No
-Sprint 4,Payment API,Done,8,No
-Sprint 4,Security Patch,Done,13,No
-Sprint 4,Encryption Module,Done,8,No
-Sprint 5,Login API,Done,5,No
-Sprint 5,Payment API,In Progress,8,Yes
-Sprint 5,Security Patch,Done,13,No
-Sprint 5,Encryption Module,To Do,8,No
-Sprint 6,Login API,Done,5,No
-Sprint 6,Payment API,Done,8,No
-Sprint 6,Security Patch,In Progress,13,Yes
-Sprint 6,Encryption Module,To Do,8,No
+Sprint,Story,Status,StoryPoints,Blocked,SprintStatus
+Sprint 1,Login API,Done,5,No,Closed
+Sprint 1,Payment API,Done,8,No,Closed
+Sprint 1,Security Patch,Done,13,No,Closed
+Sprint 1,Encryption Module,In Progress,8,Yes,Closed
+Sprint 2,Login API,Done,5,No,Closed
+Sprint 2,Payment API,Done,8,No,Closed
+Sprint 2,Security Patch,To Do,13,No,Closed
+Sprint 2,Encryption Module,To Do,8,No,Closed
+Sprint 3,Login API,Done,5,No,Closed
+Sprint 3,Payment API,In Progress,8,Yes,Closed
+Sprint 3,Security Patch,To Do,13,No,Closed
+Sprint 3,Encryption Module,To Do,8,No,Closed
+Sprint 4,Login API,Done,5,No,Closed
+Sprint 4,Payment API,Done,8,No,Closed
+Sprint 4,Security Patch,Done,13,No,Closed
+Sprint 4,Encryption Module,Done,8,No,Closed
+Sprint 5,Login API,Done,5,No,Closed
+Sprint 5,Payment API,In Progress,8,Yes,Closed
+Sprint 5,Security Patch,Done,13,No,Closed
+Sprint 5,Encryption Module,To Do,8,No,Closed
+Sprint 6,Login API,Done,5,No,Active
+Sprint 6,Payment API,Done,8,No,Active
+Sprint 6,Security Patch,In Progress,13,Yes,Active
+Sprint 6,Analysis Module,To Do,8,No,Active
+Sprint 6,Encryption Module,To Do,8,No,Active
+Sprint 6,SecurityCheck Module,To Do,8,No,Active
+Sprint 6,Architecture Module,To Do,8,yes,Active
+Sprint 6,Encryption Module,To Do,8,No,Active`

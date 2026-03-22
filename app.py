@@ -562,9 +562,6 @@ if df is not None:
                                 value=f"{row['Sprint Health %']}%",
                                 delta=row["Status"]
                             )
-
-            with st.expander("View Completed Sprint Health Details"):
-                st.dataframe(completed_health_df, width='stretch')
         else:
             st.info("No completed sprints found yet. Sprint health status will appear once a sprint reaches 100% completion.")
 
