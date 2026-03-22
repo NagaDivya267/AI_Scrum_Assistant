@@ -138,7 +138,7 @@ Be concise, data-driven, and focus on what matters most.
         with st.spinner("🧠 AI is analyzing your sprint data..."):
             try:
                 response = client.chat.completions.create(
-                    model="gemma-7b-it",  # Simple, stable, and fast
+                    model="llama-3.1-70b-versatile",  # Fast, stable, and supported
                     messages=[{"role": "user", "content": prompt}],
                     temperature=0.7,
                     max_tokens=1500
@@ -185,7 +185,7 @@ Provide:
 Be concise, practical, and actionable. Focus on what helps the team most."""
         
         response = client.chat.completions.create(
-            model="gemma-7b-it",
+            model="llama-3.1-8b-instant",  # Fast, stable, and actively supported
             messages=[{"role": "user", "content": prompt}],
             temperature=0.7,
             max_tokens=1000
