@@ -3,6 +3,7 @@ import pandas as pd
 import csv
 import os
 import re
+import datetime
 from groq import Groq
 
 # Page config
@@ -604,6 +605,47 @@ if df is not None:
         b2.metric("Blocked %", f"{metrics['blocker_pct']}%")
         b3.metric("Not Started %", f"{metrics['not_started_pct']}%")
         b4.metric("Velocity Gap %", f"{metrics['velocity_gap_pct']}%")
+
+        # --- CURRENT SPRINT SUMMARY (date-based burn rate) ---
+        st.markdown("---")
+        st.subheader("📅 Current Sprint Summary")
+
+        SPRINT_END_DATE = datetime.date(2026, 4, 7)
+        SPRINT_DURATION_DAYS = 10
+
+        committed_sp = pd.to_numeric(current_sprint_df["StoryPoints"], errors="coerce").sum() if not current_sprint_df.empty else 0
+        completed_sp_summary = pd.to_numeric(
+            current_sprint_df.loc[current_sprint_df["Status"].astype(str).str.strip().str.lower() == "done", "StoryPoints"],
+            errors="coerce"
+        ).sum() if not current_sprint_df.empty else 0
+        todo_sp = pd.to_numeric(
+            current_sprint_df.loc[current_sprint_df["Status"].astype(str).str.strip().str.lower() == "to do", "StoryPoints"],
+            errors="coerce"
+        ).sum() if not current_sprint_df.empty else 0
+
+        remaining_sp_summary = max(0, committed_sp - completed_sp_summary)
+        ideal_burn_rate = committed_sp / SPRINT_DURATION_DAYS if SPRINT_DURATION_DAYS > 0 else 0
+
+        today = datetime.date.today()
+        remaining_days = (SPRINT_END_DATE - today).days
+        if remaining_days > 0:
+            required_burn_rate = remaining_sp_summary / remaining_days
+        else:
+            required_burn_rate = remaining_sp_summary  # all remaining SP due today or overdue
+
+        spillover_risk_pct = (todo_sp / committed_sp * 100) if committed_sp > 0 else 0
+
+        cs1, cs2, cs3, cs4, cs5 = st.columns(5)
+        cs1.metric("Committed SP", round(committed_sp, 1))
+        cs2.metric("Ideal Burn Rate", f"{round(ideal_burn_rate, 2)} SP/day")
+        cs3.metric("Completed SP", round(completed_sp_summary, 1))
+        cs4.metric("Required Burn Rate", f"{round(required_burn_rate, 2)} SP/day")
+        cs5.metric("Predictive Spillover Risk", f"{round(spillover_risk_pct, 1)}%")
+
+        st.caption(
+            f"Sprint end: {SPRINT_END_DATE} | Sprint duration: {SPRINT_DURATION_DAYS} days | "
+            f"Remaining days: {max(0, remaining_days)} | Remaining SP: {round(remaining_sp_summary, 1)}"
+        )
 
         # --- PREDICTIVE KPIS ---
         confidence_metrics = calculate_sprint_confidence(current_sprint_df)
