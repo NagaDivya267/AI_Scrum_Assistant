@@ -134,20 +134,20 @@ def calculate_advanced_metrics(df):
         "total_sp": base_metrics["total_sp"],
         "completed_sp": base_metrics["completed_sp"],
         "remaining_sp": base_metrics["remaining_sp"],
-        "risk": round(base_metrics["risk_percentage"], 1),
-        "remaining_pct": round(remaining_pct, 1),
-        "blocker_pct": round(blocker_pct, 1),
-        "not_started_pct": round(not_started_pct, 1),
-        "velocity_gap_pct": round(velocity_gap_pct, 1)
+        "risk": round(base_metrics["risk_percentage"]),
+        "remaining_pct": round(remaining_pct),
+        "blocker_pct": round(blocker_pct),
+        "not_started_pct": round(not_started_pct),
+        "velocity_gap_pct": round(velocity_gap_pct)
     }
 
 def get_risk_status(risk_percentage):
     """Return human-readable risk status for sprint health"""
     if risk_percentage >= 60:
-        return f"🔴 High Risk ({risk_percentage:.1f}%) - Sprint is at significant delivery risk"
+        return f"🔴 High Risk ({round(risk_percentage)}%) - Sprint is at significant delivery risk"
     if risk_percentage >= 35:
-        return f"🟡 Medium Risk ({risk_percentage:.1f}%) - Sprint needs close monitoring"
-    return f"🟢 Low Risk ({risk_percentage:.1f}%) - Sprint is in a healthy range"
+        return f"🟡 Medium Risk ({round(risk_percentage)}%) - Sprint needs close monitoring"
+    return f"🟢 Low Risk ({round(risk_percentage)}%) - Sprint is in a healthy range"
 
 def extract_sprint_number(sprint_name):
     """Extract sprint number for natural sorting of sprint labels."""
@@ -342,8 +342,8 @@ def prepare_llm_summary(df):
     - Completed Story Points: {metrics['completed_sp']}
     - In Progress Story Points: {metrics['in_progress_sp']}
     - To Do Story Points: {metrics['todo_sp']}
-    - Completion Rate: {metrics['completion_rate']:.1f}%
-    - Risk Percentage: {metrics['risk_percentage']:.1f}%
+    - Completion Rate: {metrics['completion_rate']:.0f}%
+    - Risk Percentage: {metrics['risk_percentage']:.0f}%
     - Blocked Items: {metrics['blocked_count']}
     
     SPRINT-WISE DATA:
@@ -401,14 +401,14 @@ def generate_ai_insights(df, project_context="agile software delivery"):
 
 Analyze the sprint health based on:
 
-- Remaining Work: {remaining_pct:.1f}%
-- Blockers: {blocker_pct:.1f}%
-- Not Started Work: {not_started_pct:.1f}%
-- Velocity Gap: {velocity_gap_pct:.1f}%
-- Overall Risk: {risk_pct:.1f}%
+- Remaining Work: {remaining_pct:.0f}%
+- Blockers: {blocker_pct:.0f}%
+- Not Started Work: {not_started_pct:.0f}%
+- Velocity Gap: {velocity_gap_pct:.0f}%
+- Overall Risk: {risk_pct:.0f}%
 - Blocked Items: {metrics['blocked_count']}
 - In Progress: {metrics['in_progress_sp']} pts
-- Current Completion: {metrics['completion_rate']:.1f}%
+- Current Completion: {metrics['completion_rate']:.0f}%
 
 Provide response in this format:
 
@@ -608,7 +608,7 @@ if df is not None:
 
         # --- CURRENT SPRINT SUMMARY (date-based burn rate) ---
         st.markdown("---")
-        st.subheader("📅 Current Sprint Summary")
+        st.subheader("📅 Current Sprint Spillover Prediction")
 
         SPRINT_END_DATE = datetime.date(2026, 4, 7)
         SPRINT_DURATION_DAYS = 10
@@ -636,15 +636,15 @@ if df is not None:
         spillover_risk_pct = (todo_sp / committed_sp * 100) if committed_sp > 0 else 0
 
         cs1, cs2, cs3, cs4, cs5 = st.columns(5)
-        cs1.metric("Committed SP", round(committed_sp, 1))
-        cs2.metric("Ideal Burn Rate", f"{round(ideal_burn_rate, 2)} SP/day")
-        cs3.metric("Completed SP", round(completed_sp_summary, 1))
-        cs4.metric("Required Burn Rate", f"{round(required_burn_rate, 2)} SP/day")
-        cs5.metric("Predictive Spillover Risk", f"{round(spillover_risk_pct, 1)}%")
+        cs1.metric("Committed SP", round(committed_sp))
+        cs2.metric("Ideal Burn Rate", f"{round(ideal_burn_rate)} SP/day")
+        cs3.metric("Completed SP", round(completed_sp_summary))
+        cs4.metric("Required Burn Rate", f"{round(required_burn_rate)} SP/day")
+        cs5.metric("Predictive Spillover Risk", f"{round(spillover_risk_pct)}%")
 
         st.caption(
             f"Sprint end: {SPRINT_END_DATE} | Sprint duration: {SPRINT_DURATION_DAYS} days | "
-            f"Remaining days: {max(0, remaining_days)} | Remaining SP: {round(remaining_sp_summary, 1)}"
+            f"Remaining days: {max(0, remaining_days)} | Remaining SP: {round(remaining_sp_summary)}"
         )
 
         # --- PREDICTIVE KPIS ---
@@ -707,7 +707,7 @@ if df is not None:
         color1 = get_color(success_probability, 85, 60)
         col1.markdown(f"""
 <div class="card {color1}">
-    🚀 {round(success_probability,2)}% <br>
+    🚀 {round(success_probability)}% <br>
     Success Probability
 </div>
 """, unsafe_allow_html=True)
@@ -715,7 +715,7 @@ if df is not None:
         color2 = "red" if spillover_sp > 5 else "green"
         col2.markdown(f"""
 <div class="card {color2}">
-    📉 {round(spillover_sp,2)} SP <br>
+    📉 {round(spillover_sp)} SP <br>
     Spillover
 </div>
 """, unsafe_allow_html=True)
@@ -723,7 +723,7 @@ if df is not None:
         color3 = "green" if risk_index < 30 else "yellow" if risk_index < 60 else "red"
         col3.markdown(f"""
 <div class="card {color3}">
-    ⚠️ {round(risk_index,2)} <br>
+    ⚠️ {round(risk_index)} <br>
     Risk Index
 </div>
 """, unsafe_allow_html=True)
@@ -731,7 +731,7 @@ if df is not None:
         color4 = get_color(confidence_score, 75, 50)
         col4.markdown(f"""
 <div class="card {color4}">
-    🎯 {round(confidence_score,2)}% <br>
+    🎯 {round(confidence_score)}% <br>
     Confidence Score
 </div>
 """, unsafe_allow_html=True)
@@ -762,7 +762,7 @@ if df is not None:
     font-weight:bold;
     color:{text_color};">
     {indicator_text} <br>
-    {round(success_probability,2)}% Confidence
+    {round(success_probability)}% Confidence
 </div>
 """, unsafe_allow_html=True)
 
@@ -785,7 +785,7 @@ if df is not None:
         simulated_remaining = max(0, metrics["remaining_sp"] - extra_sp)
         simulated_risk = (simulated_remaining / metrics["total_sp"] * 100) if metrics["total_sp"] > 0 else 0
 
-        st.info(f"👉 New Risk: {round(simulated_risk, 2)}%")
+        st.info(f"👉 New Risk: {round(simulated_risk)}%")
     
     # Tab 4: AI Insights
     with tab4:
