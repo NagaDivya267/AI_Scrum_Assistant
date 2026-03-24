@@ -791,7 +791,6 @@ if df is not None:
         else:
             st.markdown("""
             **Ask me anything about your sprint!**
-            - "Why are we blocked on the Encryption Module?"
             - "How can we improve our velocity?"
             - "What should we do about the blocked items?"
             - "Which sprint is at risk?"
