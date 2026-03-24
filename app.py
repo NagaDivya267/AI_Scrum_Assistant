@@ -102,10 +102,13 @@ def calculate_metrics(df):
     total_completed = sum(s["Done"] for s in sprints_summary.values())
     total_in_progress = sum(s["In Progress"] for s in sprints_summary.values())
     total_todo = sum(s["To Do"] for s in sprints_summary.values())
-    blocked_count = len(df[df['Blocked'].astype(str).str.strip().str.lower() == 'yes'])
+    blocked_mask = df['Blocked'].astype(str).str.strip().str.lower() == 'yes'
+    blocked_count = blocked_mask.sum()
+    blocked_sp = pd.to_numeric(df.loc[blocked_mask, 'StoryPoints'], errors='coerce').fillna(0).sum()
     
     completion_rate = (total_completed / total_story_points * 100) if total_story_points > 0 else 0
-    risk_percentage = ((total_in_progress + total_todo) / total_story_points * 100) if total_story_points > 0 else 0
+    # Risk% = Sum of blocked SP / Committed story points
+    risk_percentage = (blocked_sp / total_story_points * 100) if total_story_points > 0 else 0
     
     return {
         "total_sp": total_story_points,
@@ -113,21 +116,25 @@ def calculate_metrics(df):
         "remaining_sp": total_todo + total_in_progress,
         "in_progress_sp": total_in_progress,
         "todo_sp": total_todo,
-        "blocked_count": blocked_count,
+        "blocked_count": int(blocked_count),
+        "blocked_sp": blocked_sp,
         "completion_rate": completion_rate,
         "risk_percentage": risk_percentage
     }
-def calculate_advanced_metrics(df):
+def calculate_advanced_metrics(df, full_df=None):
     """Calculate advanced risk metrics for advisor-style UI"""
     base_metrics = calculate_metrics(df)
-    velocity_metrics = get_velocity_metrics(df)
+    # Use full_df (all sprints) for last-3-sprint velocity; fall back to df if not provided
+    velocity_metrics = get_velocity_metrics(full_df if full_df is not None else df)
 
     total_sp = base_metrics["total_sp"]
     total_items = len(df)
 
     remaining_pct = (base_metrics["remaining_sp"] / total_sp * 100) if total_sp > 0 else 0
-    blocker_pct = (base_metrics["blocked_count"] / total_items * 100) if total_items > 0 else 0
+    # Blocked % based on sum of blocked SP relative to committed SP
+    blocker_pct = (base_metrics["blocked_sp"] / total_sp * 100) if total_sp > 0 else 0
     not_started_pct = (base_metrics["todo_sp"] / total_sp * 100) if total_sp > 0 else 0
+    # Velocity gap: gap between remaining SP (required burn) and avg velocity from last 3 sprints
     velocity_gap_pct = ((base_metrics["remaining_sp"] - velocity_metrics["avg_velocity"]) / total_sp * 100) if total_sp > 0 else 0
 
     return {
@@ -266,23 +273,40 @@ def get_completed_sprint_health(df):
     return pd.DataFrame(health_rows)
 
 def get_velocity_metrics(df):
-    """Calculate velocity-based metrics across sprints"""
-    sprints_summary = get_sprint_summary(df)
-    
-    # Calculate velocity (completed story points) per sprint
-    sprint_velocities = []
-    for sprint_name, stats in sorted(sprints_summary.items()):
-        sprint_velocities.append(stats['Done'])
-    
-    if len(sprint_velocities) > 0:
-        avg_velocity = sum(sprint_velocities) / len(sprint_velocities)
+    """Calculate velocity-based metrics using the last 3 completed sprints"""
+    # Identify completed sprint names
+    if 'SprintStatus' in df.columns:
+        closed_df = df[df['SprintStatus'].astype(str).str.strip().str.lower() == 'closed']
+        completed_sprint_names = sorted(
+            closed_df['Sprint'].dropna().astype(str).unique(),
+            key=extract_sprint_number
+        )
     else:
-        avg_velocity = 0
-    
+        current_sprint = get_current_sprint_name(df)
+        all_sprints = sorted(df['Sprint'].dropna().astype(str).unique(), key=extract_sprint_number)
+        completed_sprint_names = [s for s in all_sprints if s != current_sprint]
+
+    # Calculate Done SP per completed sprint
+    sprint_velocities = []
+    for sprint_name in completed_sprint_names:
+        sprint_df = df[df['Sprint'] == sprint_name]
+        done_sp = pd.to_numeric(
+            sprint_df[sprint_df['Status'].astype(str).str.strip().str.lower() == 'done']['StoryPoints'],
+            errors='coerce'
+        ).fillna(0).sum()
+        sprint_velocities.append(done_sp)
+
+    # Average velocity based on last 3 completed sprints
+    last_3 = sprint_velocities[-3:] if len(sprint_velocities) >= 3 else sprint_velocities
+    avg_velocity = sum(last_3) / len(last_3) if last_3 else 0
+
     return {
         "avg_velocity": avg_velocity,
         "velocities": sprint_velocities,
-        "velocity_trend": "Stable" if len(sprint_velocities) <= 1 else ("📈 Improving" if sprint_velocities[-1] > avg_velocity else "📉 Declining" if sprint_velocities[-1] < avg_velocity else "➡️ Stable")
+        "velocity_trend": "Stable" if len(sprint_velocities) <= 1 else (
+            "📈 Improving" if sprint_velocities[-1] > avg_velocity else
+            "📉 Declining" if sprint_velocities[-1] < avg_velocity else "➡️ Stable"
+        )
     }
 
 def get_traffic_light(confidence):
@@ -303,10 +327,11 @@ def get_color(value, good, medium):
     else:
         return "red"
 
-def calculate_sprint_confidence(df):
+def calculate_sprint_confidence(df, full_df=None):
     """Calculate confidence in sprint goal completion based on velocity and current progress"""
     metrics = calculate_metrics(df)
-    velocity_metrics = get_velocity_metrics(df)
+    # Use full_df (all sprints) for last-3-sprint velocity; fall back to df if not provided
+    velocity_metrics = get_velocity_metrics(full_df if full_df is not None else df)
     
     # Current completion rate
     current_completion = metrics['completion_rate']
@@ -389,13 +414,14 @@ def generate_ai_insights(df, project_context="agile software delivery"):
         total_sp = metrics['total_sp']
         remaining_pct = (metrics['remaining_sp'] / total_sp * 100) if total_sp > 0 else 0
         not_started_pct = (metrics['todo_sp'] / total_sp * 100) if total_sp > 0 else 0
-        blocker_pct = (metrics['blocked_count'] / len(df) * 100) if len(df) > 0 else 0
+        # Blocked % = blocked SP / committed SP
+        blocker_pct = (metrics['blocked_sp'] / total_sp * 100) if total_sp > 0 else 0
         risk_pct = metrics['risk_percentage']
         
-        # Calculate velocity gap (difference between expected and actual)
+        # Velocity gap based on avg velocity from last 3 completed sprints vs required remaining work
         velocity_metrics = get_velocity_metrics(df)
         avg_velocity = velocity_metrics['avg_velocity']
-        velocity_gap_pct = ((total_sp - metrics['completed_sp']) - avg_velocity) / total_sp * 100 if total_sp > 0 else 0
+        velocity_gap_pct = (metrics['remaining_sp'] - avg_velocity) / total_sp * 100 if total_sp > 0 else 0
         
         prompt = f"""You are an experienced Scrum Master coach working in {project_context} projects.
 
@@ -579,7 +605,7 @@ if df is not None:
 
         # --- METRICS ---
         st.subheader(f"🚦 Current Sprint Health Status ({current_sprint_name})" if current_sprint_name else "🚦 Current Sprint Health Status")
-        metrics = calculate_advanced_metrics(current_sprint_df)
+        metrics = calculate_advanced_metrics(current_sprint_df, df)
 
         col1, col2, col3, col4 = st.columns(4)
         col1.metric("Total SP", metrics["total_sp"])
@@ -648,8 +674,8 @@ if df is not None:
         )
 
         # --- PREDICTIVE KPIS ---
-        confidence_metrics = calculate_sprint_confidence(current_sprint_df)
-        velocity_metrics = get_velocity_metrics(current_sprint_df)
+        confidence_metrics = calculate_sprint_confidence(current_sprint_df, df)
+        velocity_metrics = get_velocity_metrics(df)
 
         total_sp = metrics["total_sp"]
         completed_sp = metrics["completed_sp"]
