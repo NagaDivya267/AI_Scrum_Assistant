@@ -12,6 +12,16 @@ st.set_page_config(page_title="AI Scrum Assistant", layout="wide", initial_sideb
 # Define the CSV file path
 csv_file = "sprint_data.csv"
 
+# Risk classification thresholds (used consistently across prompt generation and alert banners)
+RISK_HIGH_THRESHOLD = 50       # risk_pct above this → HIGH RISK
+RISK_REMAINING_HIGH = 40       # remaining_pct above this → also HIGH RISK
+RISK_MODERATE_THRESHOLD = 30   # risk_pct above this → AT RISK
+
+# Pattern detection thresholds
+BLOCKER_PCT_THRESHOLD = 25     # blocker_pct above this → "High blocker dependency"
+NOT_STARTED_PCT_THRESHOLD = 30 # not_started_pct above this → "Poor sprint planning"
+VELOCITY_GAP_THRESHOLD = 20    # velocity_gap_pct above this → "Velocity mismatch"
+
 # Sidebar - API Key Setup
 st.sidebar.markdown("### ⚙️ Configuration")
 
@@ -396,7 +406,7 @@ def get_api_key():
     
     return os.getenv("GROQ_API_KEY", "")
 
-def generate_ai_insights(df, project_context="agile software delivery"):
+def generate_ai_insights(df, project_context="agile software delivery", full_df=None):
     """Generate AI-powered insights using Groq with structured metrics"""
     api_key = get_api_key()
     
@@ -414,42 +424,92 @@ def generate_ai_insights(df, project_context="agile software delivery"):
         total_sp = metrics['total_sp']
         remaining_pct = (metrics['remaining_sp'] / total_sp * 100) if total_sp > 0 else 0
         not_started_pct = (metrics['todo_sp'] / total_sp * 100) if total_sp > 0 else 0
-        # Blocked % = blocked SP / committed SP
         blocker_pct = (metrics['blocked_sp'] / total_sp * 100) if total_sp > 0 else 0
         risk_pct = metrics['risk_percentage']
         
         # Velocity gap based on avg velocity from last 3 completed sprints vs required remaining work
-        velocity_metrics = get_velocity_metrics(df)
+        velocity_metrics = get_velocity_metrics(full_df if full_df is not None else df)
         avg_velocity = velocity_metrics['avg_velocity']
         velocity_gap_pct = (metrics['remaining_sp'] - avg_velocity) / total_sp * 100 if total_sp > 0 else 0
         
-        prompt = f"""You are an experienced Scrum Master coach working in {project_context} projects.
+        # Historical context from completed sprints
+        completed_health_df = get_completed_sprint_health(full_df if full_df is not None else df)
+        avg_predictability = completed_health_df["Predictability %"].mean() if not completed_health_df.empty else 0
+        
+        # Decision thresholds
+        if risk_pct > RISK_HIGH_THRESHOLD or remaining_pct > RISK_REMAINING_HIGH:
+            sprint_verdict = "HIGH RISK"
+        elif risk_pct > RISK_MODERATE_THRESHOLD:
+            sprint_verdict = "AT RISK"
+        else:
+            sprint_verdict = "ON TRACK"
+        
+        # Pattern detection
+        patterns = []
+        if blocker_pct > BLOCKER_PCT_THRESHOLD:
+            patterns.append("High blocker dependency")
+        if not_started_pct > NOT_STARTED_PCT_THRESHOLD:
+            patterns.append("Poor sprint planning")
+        if velocity_gap_pct > VELOCITY_GAP_THRESHOLD:
+            patterns.append("Velocity mismatch")
+        pattern_text = ", ".join(patterns) if patterns else "No critical patterns detected"
+        
+        prompt = f"""You are a Senior Scrum Master and SAFe RTE with 12+ years of experience.
 
-Analyze the sprint health based on:
+You are NOT an analyst. You are a DELIVERY COACH.
+You challenge the team. You do not give polite answers.
 
-- Remaining Work: {remaining_pct:.0f}%
-- Blockers: {blocker_pct:.0f}%
-- Not Started Work: {not_started_pct:.0f}%
-- Velocity Gap: {velocity_gap_pct:.0f}%
-- Overall Risk: {risk_pct:.0f}%
-- Blocked Items: {metrics['blocked_count']}
-- In Progress: {metrics['in_progress_sp']} pts
-- Current Completion: {metrics['completion_rate']:.0f}%
+Your job:
+- Diagnose sprint health
+- Predict outcome
+- Give strict, practical actions
 
-Provide response in this format:
+SPRINT DATA:
 
-1. Sprint Health Summary (1-2 lines)
+Remaining Work: {remaining_pct:.0f}%
+Blocked Work: {blocker_pct:.0f}%
+Not Started Work: {not_started_pct:.0f}%
+Velocity Gap: {velocity_gap_pct:.0f}%
+Risk Level: {risk_pct:.0f}%
+Current Completion: {metrics['completion_rate']:.0f}%
+Blocked Items: {metrics['blocked_count']}
+Average Predictability (last sprints): {avg_predictability:.0f}%
+Velocity Trend: {velocity_metrics['velocity_trend']}
+Average Velocity: {avg_velocity:.0f} SP
+System Assessment: {sprint_verdict}
+Detected Patterns: {pattern_text}
 
-2. Key Risks (bullet points)
-   - Be specific (e.g., too many stories not started, high blocker rate)
+---
 
-3. Root Cause Analysis
-   - Why this is happening
+Respond STRICTLY in this format:
 
-4. Recommended Actions (very practical)
-   - What Scrum Master should do tomorrow
+🚦 SPRINT VERDICT:
+(Will sprint succeed or fail? Be bold.)
 
-Keep it concise and actionable."""
+🔍 ROOT CAUSE:
+(Top 2–3 real reasons — no generic statements)
+
+⚠️ DELIVERY RISKS:
+- (Specific, data-driven risks)
+
+🎯 ACTION PLAN (Scrum Master must do tomorrow):
+1.
+2.
+3.
+
+📈 IMPACT IF ACTION TAKEN:
+(What improvement will happen in % terms)
+
+---
+
+Rules:
+- Be direct, no fluff
+- No generic agile theory
+- Use numbers from data
+- Sound like a real Scrum Master in a tough sprint
+- Do NOT exceed 150 words
+- Avoid repeating metrics
+- Be crisp and assertive"""
         
         with st.spinner("🧠 AI is analyzing your sprint data..."):
             try:
@@ -487,7 +547,13 @@ def chat_with_ai(df, user_question):
         
         summary = prepare_llm_summary(df)
         
-        prompt = f"""You are an expert Scrum Master with 10+ years of experience helping agile teams deliver successfully.
+        prompt = f"""You are a Delivery Manager + Scrum Master + Agile Coach with 10+ years of experience.
+
+When answering:
+- Always diagnose before suggesting
+- Use sprint data
+- Give actionable steps
+- Avoid generic advice
 
 SPRINT DATA CONTEXT:
 {summary}
@@ -795,7 +861,7 @@ if df is not None:
         # --- AI INSIGHTS ---
         st.subheader("🧠 AI Recommendations")
         if st.button("🚀 Generate Advisor Insights", key="generate_advisor_insights"):
-            insights = generate_ai_insights(current_sprint_df)
+            insights = generate_ai_insights(current_sprint_df, full_df=df)
             if insights:
                 st.session_state.ai_insights = insights
 
@@ -859,8 +925,9 @@ if df is not None:
     
     # Tab 4: AI Insights
     with tab4:
-        st.subheader("🧠 AI-Powered Sprint Analysis (Powered by Groq)")
-        
+        st.markdown("## 🧠 AI Delivery Coach")
+        st.markdown("*Powered by Groq — Senior Scrum Master + SAFe RTE perspective*")
+
         # Check if API key is configured
         if not os.getenv("GROQ_API_KEY"):
             st.info("📝 Please enter your Groq API key in the sidebar (⚙️ Configuration) to enable AI insights.")
@@ -879,11 +946,43 @@ if df is not None:
             ✅ No Cost Limits - Generate unlimited insights
             """)
         else:
+            # Get current sprint for risk calculation
+            current_sprint_df_ai, current_sprint_name_ai = get_current_sprint_df(df)
+            ai_metrics = calculate_metrics(current_sprint_df_ai)
+            ai_risk = ai_metrics["risk_percentage"]
+
+            # Auto coaching alert banner
+            if ai_risk > RISK_HIGH_THRESHOLD:
+                st.error(f"🚨 AI Alert: High sprint risk detected — {round(ai_risk)}% risk index. Immediate action required.")
+            elif ai_risk > RISK_MODERATE_THRESHOLD:
+                st.warning(f"⚠️ AI Alert: Sprint is at risk — {round(ai_risk)}% risk index. Monitor closely.")
+
+            # Quick question suggestion buttons
+            st.markdown("### 💡 Quick Questions")
+            q_col1, q_col2, q_col3 = st.columns(3)
+            quick_question = None
+            with q_col1:
+                if st.button("Will we meet the sprint goal?", use_container_width=True):
+                    quick_question = "Will we meet the sprint goal?"
+            with q_col2:
+                if st.button("What should I do today?", use_container_width=True):
+                    quick_question = "What should I do today as Scrum Master?"
+            with q_col3:
+                if st.button("Biggest risk right now?", use_container_width=True):
+                    quick_question = "What is the biggest risk right now?"
+
+            if quick_question:
+                with st.spinner("🤔 Thinking..."):
+                    quick_response = chat_with_ai(df, quick_question)
+                st.info(f"**{quick_question}**\n\n{quick_response}")
+
+            st.markdown("---")
+
             col1, col2, col3 = st.columns([3, 1, 1])
             
             with col2:
                 if st.button("🚀 Generate AI Insights", use_container_width=True):
-                    insights = generate_ai_insights(df)
+                    insights = generate_ai_insights(current_sprint_df_ai, full_df=df)
                     
                     if insights:
                         st.session_state.ai_insights = insights
@@ -902,11 +1001,11 @@ if df is not None:
             if "ai_insights" in st.session_state and st.session_state.ai_insights:
                 st.markdown(st.session_state.ai_insights)
             else:
-                st.info("💡 Click 'Generate AI Insights' to get AI-powered analysis of your sprint health, risks, and recommendations.")
+                st.info("💡 Click 'Generate AI Insights' to get a data-driven coaching verdict from your AI Delivery Coach.")
     
     # Tab 5: Chat
     with tab5:
-        st.subheader("💬 Chat with Sprint Assistant")
+        st.subheader("🤖 Ask Delivery Copilot")
         
         if not os.getenv("GROQ_API_KEY"):
             st.info("📝 Please enter your Groq API key in the sidebar (⚙️ Configuration) to use the chat.")
@@ -918,15 +1017,19 @@ if df is not None:
             - "Which sprint is at risk?"
             """)
             
-            # Example questions for Scrum Masters
-            st.markdown("**💡 Try asking:**")
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.write("- Will we meet sprint goal?")
-            with col2:
-                st.write("- What are the key risks?")
-            with col3:
-                st.write("- What should I do as Scrum Master?")
+            # Quick question suggestion buttons
+            st.markdown("### 💡 Quick Questions")
+            chat_q_col1, chat_q_col2, chat_q_col3 = st.columns(3)
+            preset_question = None
+            with chat_q_col1:
+                if st.button("Will we meet sprint goal?", key="chat_q1", use_container_width=True):
+                    preset_question = "Will we meet sprint goal?"
+            with chat_q_col2:
+                if st.button("What should I do today?", key="chat_q2", use_container_width=True):
+                    preset_question = "What should I do today as Scrum Master?"
+            with chat_q_col3:
+                if st.button("Biggest risk right now?", key="chat_q3", use_container_width=True):
+                    preset_question = "What is the biggest risk right now?"
             
             # Initialize chat history in session state
             if "chat_history" not in st.session_state:
@@ -943,6 +1046,17 @@ if df is not None:
                 with st.chat_message(message["role"]):
                     st.markdown(message["content"])
             
+            # Handle preset quick questions
+            if preset_question:
+                st.session_state.chat_history.append({"role": "user", "content": preset_question})
+                with st.chat_message("user"):
+                    st.markdown(preset_question)
+                with st.chat_message("assistant"):
+                    with st.spinner("🤔 Thinking..."):
+                        response = chat_with_ai(df, preset_question)
+                        st.markdown(response)
+                st.session_state.chat_history.append({"role": "assistant", "content": response})
+
             # Chat input
             user_input = st.chat_input("Ask a question about your sprint...")
             
