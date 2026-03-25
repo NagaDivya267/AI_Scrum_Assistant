@@ -9,6 +9,108 @@ from groq import Groq
 # Page config
 st.set_page_config(page_title="AI Scrum Assistant", layout="wide", initial_sidebar_state="expanded")
 
+# Global custom CSS for modern dark UI
+st.markdown("""
+<style>
+/* ── Header gradient banner ── */
+h1 {
+    background: linear-gradient(90deg, #00D4AA 0%, #6C63FF 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    font-size: 2.4rem !important;
+    font-weight: 800 !important;
+    letter-spacing: 0.5px;
+}
+
+/* ── Sidebar polish ── */
+section[data-testid="stSidebar"] {
+    background: #161B22;
+    border-right: 1px solid #30363D;
+}
+section[data-testid="stSidebar"] h3 {
+    color: #00D4AA;
+    font-size: 0.95rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 6px;
+}
+
+/* ── Tabs ── */
+button[data-baseweb="tab"] {
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: #8B949E;
+}
+button[data-baseweb="tab"][aria-selected="true"] {
+    color: #00D4AA !important;
+    border-bottom: 3px solid #00D4AA !important;
+}
+
+/* ── Metric cards ── */
+div[data-testid="stMetric"] {
+    background: #161B22;
+    border: 1px solid #30363D;
+    border-radius: 12px;
+    padding: 16px 20px;
+    transition: box-shadow 0.2s;
+}
+div[data-testid="stMetric"]:hover {
+    box-shadow: 0 0 0 2px #00D4AA44;
+}
+div[data-testid="stMetricLabel"] {
+    color: #8B949E !important;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+div[data-testid="stMetricValue"] {
+    color: #C9D1D9 !important;
+    font-size: 1.8rem !important;
+    font-weight: 700 !important;
+}
+
+/* ── Buttons ── */
+div.stButton > button {
+    background: linear-gradient(135deg, #00D4AA, #6C63FF);
+    color: #0D1117;
+    font-weight: 700;
+    border: none;
+    border-radius: 8px;
+    padding: 0.5rem 1.2rem;
+    transition: opacity 0.2s, transform 0.1s;
+}
+div.stButton > button:hover {
+    opacity: 0.88;
+    transform: translateY(-1px);
+}
+
+/* ── Dividers ── */
+hr {
+    border-color: #30363D !important;
+}
+
+/* ── Dataframe / table ── */
+div[data-testid="stDataFrame"] {
+    border: 1px solid #30363D;
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+/* ── Expander ── */
+div[data-testid="stExpander"] {
+    border: 1px solid #30363D;
+    border-radius: 10px;
+    background: #161B22;
+}
+
+/* ── Alert boxes ── */
+div[data-testid="stAlert"] {
+    border-radius: 10px;
+}
+</style>
+""", unsafe_allow_html=True)
+
 # Define the CSV file path
 csv_file = "sprint_data.csv"
 
@@ -779,16 +881,21 @@ if df is not None:
         st.markdown("""
 <style>
 .card {
-    padding: 20px;
-    border-radius: 12px;
-    color: white;
+    padding: 22px 16px;
+    border-radius: 14px;
+    color: #FAFAFA;
     text-align: center;
-    font-size: 20px;
-    font-weight: bold;
+    font-size: 1.15rem;
+    font-weight: 700;
+    line-height: 1.6;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+    border: 1px solid rgba(255,255,255,0.08);
+    transition: transform 0.15s;
 }
-.green { background-color: #28a745; }
-.yellow { background-color: #ffc107; color: black; }
-.red { background-color: #dc3545; }
+.card:hover { transform: translateY(-2px); }
+.green  { background: linear-gradient(135deg, #1a7a4a, #28a745); }
+.yellow { background: linear-gradient(135deg, #a07800, #ffc107); color: #1a1a1a; }
+.red    { background: linear-gradient(135deg, #8b1a1a, #dc3545); }
 </style>
 """, unsafe_allow_html=True)
 
@@ -833,28 +940,34 @@ if df is not None:
 
         if success_probability >= 85:
             indicator_color = "#28a745"
+            indicator_gradient = "#1a7a4a"
             indicator_text = "🟢 ON TRACK"
             text_color = "white"
         elif success_probability >= 60:
             indicator_color = "#ffc107"
+            indicator_gradient = "#a07800"
             indicator_text = "🟡 AT RISK"
             text_color = "black"
         else:
             indicator_color = "#dc3545"
+            indicator_gradient = "#8b1a1a"
             indicator_text = "🔴 HIGH RISK"
             text_color = "white"
 
         st.markdown(f"""
 <div style="
-    background-color:{indicator_color};
-    padding:30px;
-    border-radius:15px;
-    text-align:center;
-    font-size:28px;
-    font-weight:bold;
-    color:{text_color};">
+    background: linear-gradient(135deg, {indicator_gradient}, {indicator_color});
+    padding: 32px 20px;
+    border-radius: 16px;
+    text-align: center;
+    font-size: 2rem;
+    font-weight: 800;
+    color: {text_color};
+    box-shadow: 0 6px 24px rgba(0,0,0,0.45);
+    border: 1px solid rgba(255,255,255,0.1);
+    letter-spacing: 1px;">
     {indicator_text} <br>
-    {round(success_probability)}% Confidence
+    <span style="font-size:1.1rem; font-weight:400; opacity:0.85;">{round(success_probability)}% Confidence</span>
 </div>
 """, unsafe_allow_html=True)
 
