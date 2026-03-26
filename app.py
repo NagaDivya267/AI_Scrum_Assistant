@@ -713,8 +713,7 @@ if uploaded_file is not None:
 
 if df is None:
     df = read_from_csv()
-    if df is not None:
-        st.sidebar.info("ℹ️ Using default sprint_data.csv")
+    pass
 
 if df is not None and page == "📊 Sprint Analytics":
     # Create tabs with new AI Insights tab and Chat tab
