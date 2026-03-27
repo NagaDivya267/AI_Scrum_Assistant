@@ -1,25 +1,4 @@
 import streamlit as st
-import random
-import json
-from oauth2client.service_account import ServiceAccountCredentials
-
-scope = [
-    "https://spreadsheets.google.com/feeds",
-    "https://www.googleapis.com/auth/drive"
-]
-
-try:
-    # Cloud (Streamlit)
-    creds_dict = json.loads(st.secrets["google"]["credentials"])
-    creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
-except Exception:
-    # Local fallback
-    creds = ServiceAccountCredentials.from_json_keyfile_name("credentials.json", scope)
-
-st.set_page_config(page_title="AI Scrum Master", layout="wide")
-
-st.title("🤖 AI Scrum Master Retrospective Tool")
-
 # Create Tabs
 tab1, tab2, tab3, tab4 = st.tabs([
     "😊 Mood",
@@ -29,7 +8,6 @@ tab1, tab2, tab3, tab4 = st.tabs([
 ])
 with tab1:
     st.subheader("Team Mood Check")
-
     st.write("Select your mood:")
 
     col1, col2, col3, col4, col5 = st.columns(5)
@@ -60,14 +38,12 @@ with tab1:
             st.success("🚀 Positive team energy")
 if "mood_history" not in st.session_state:
     st.session_state.mood_history = []
-
 if selected_mood:
     st.session_state.mood_history.append(selected_mood)
+    if st.session_state.mood_history:
+        avg_mood = sum(st.session_state.mood_history) / len(st.session_state.mood_history)
 
-if st.session_state.mood_history:
-    avg_mood = sum(st.session_state.mood_history) / len(st.session_state.mood_history)
-
-    st.metric("Average Mood", f"{avg_mood:.2f}")
+        st.metric("Average Mood", f"{avg_mood:.2f}")
 
     if avg_mood < 2.5:
         st.error("Team is struggling 😟")
