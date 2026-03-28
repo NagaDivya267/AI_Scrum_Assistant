@@ -87,29 +87,57 @@ spin_questions = [
 ]
 
 
-def get_openai_api_key() -> str | None:
-    # Support multiple secrets layouts used in Streamlit deployments.
-    candidates: list[str | None] = [
-        os.getenv("OPENAI_API_KEY"),
-        st.secrets.get("OPENAI_API_KEY") if "OPENAI_API_KEY" in st.secrets else None,
-        st.secrets.get("openai_api_key") if "openai_api_key" in st.secrets else None,
+def get_openai_api_key() -> tuple[str | None, str, list[str]]:
+    """Resolve OpenAI API key across local env and multiple Streamlit secrets layouts."""
+    candidates: list[tuple[str | None, str]] = [
+        (os.getenv("OPENAI_API_KEY"), "env:OPENAI_API_KEY"),
     ]
+
+    secret_keys: list[str] = []
+    try:
+        secret_keys = list(st.secrets.keys())
+    except Exception:
+        secret_keys = []
+
+    if "OPENAI_API_KEY" in st.secrets:
+        candidates.append((st.secrets.get("OPENAI_API_KEY"), "secrets:OPENAI_API_KEY"))
+    if "openai_api_key" in st.secrets:
+        candidates.append((st.secrets.get("openai_api_key"), "secrets:openai_api_key"))
+    if "api_key" in st.secrets:
+        candidates.append((st.secrets.get("api_key"), "secrets:api_key"))
 
     if "openai" in st.secrets:
         openai_section = st.secrets["openai"]
         if hasattr(openai_section, "get"):
             candidates.extend(
                 [
-                    openai_section.get("api_key"),
-                    openai_section.get("OPENAI_API_KEY"),
+                    (openai_section.get("api_key"), "secrets:openai.api_key"),
+                    (openai_section.get("OPENAI_API_KEY"), "secrets:openai.OPENAI_API_KEY"),
                 ]
             )
 
-    for value in candidates:
-        if value and str(value).strip():
-            return str(value).strip()
+    # Last resort: scan nested secrets recursively for key-like fields.
+    def scan_mapping(mapping, prefix: str = "secrets"):
+        discovered: list[tuple[str | None, str]] = []
+        if not hasattr(mapping, "items"):
+            return discovered
+        for key, value in mapping.items():
+            key_str = str(key)
+            lower_key = key_str.lower()
+            path = f"{prefix}.{key_str}"
+            if lower_key in {"openai_api_key", "api_key"}:
+                discovered.append((value, path))
+            if hasattr(value, "items"):
+                discovered.extend(scan_mapping(value, path))
+        return discovered
 
-    return None
+    candidates.extend(scan_mapping(st.secrets))
+
+    for value, source in candidates:
+        if value and str(value).strip():
+            return str(value).strip(), source, secret_keys
+
+    return None, "not-found", secret_keys
 
 
 @st.cache_data(show_spinner=False)
@@ -532,12 +560,16 @@ with tab4:
                 # ---- AI Analysis ----
                 st.write("### 🤖 AI Analysis")
                 if st.button("Generate AI Insights", key=f"ai_insights_{selected_question}"):
-                    api_key = get_openai_api_key()
+                    api_key, key_source, secret_keys = get_openai_api_key()
                     if not api_key:
                         st.error("OpenAI key is missing. Add OPENAI_API_KEY in Streamlit secrets and restart the app.")
+                        st.caption(
+                            f"Diagnostics: key_source={key_source}; top_level_secrets={', '.join(secret_keys) if secret_keys else 'none'}"
+                        )
                     elif filtered_discussion.empty:
                         st.warning("No discussion data available")
                     else:
+                        st.caption(f"Using OpenAI key from {key_source}")
                         discussion_text = "\n".join(
                             filtered_discussion["Discussion"].dropna().astype(str).tolist()
                         ).strip()
