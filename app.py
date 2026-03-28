@@ -1,3 +1,4 @@
+import base64
 import io
 import math
 import os
@@ -326,26 +327,50 @@ with tab3:
         config_sheet = get_or_create_worksheet(CONFIG_WORKSHEET_NAME, rows=20, cols=5)
         response_sheet = get_or_create_worksheet(RESPONSES_WORKSHEET_NAME, rows=500, cols=10)
 
+        if "spin_count" not in st.session_state:
+            st.session_state["spin_count"] = 0
+        if "current_spin_question" not in st.session_state:
+            st.session_state["current_spin_question"] = None
+
         if st.button("🎯 Spin the Wheel"):
-            placeholder = st.empty()
-
-            # Fast spin animation
-            for _ in range(10):
-                placeholder.markdown(f"### 🎡 {random.choice(spin_questions)}")
-                time.sleep(0.1)
-
-            # Final selection
+            # Increment spin count
+            st.session_state["spin_count"] += 1
+            is_last_spin = st.session_state["spin_count"] >= 7
+            
+            # Generate and inject audio (autoplay during spinner)
+            audio_data = generate_spin_sound()
+            audio_base64 = base64.b64encode(audio_data).decode()
+            
+            st.markdown(
+                f'<audio autoplay><source src="data:audio/wav;base64,{audio_base64}" type="audio/wav"></audio>',
+                unsafe_allow_html=True
+            )
+            
+            # Show spinner while audio plays
+            with st.spinner("🎡 Spinning the wheel..."):
+                time.sleep(1.5)
+            
+            # Pick final question and save
             final_question = random.choice(spin_questions)
             config_sheet.update_acell("A1", final_question)
-            placeholder.markdown(f"## 🎯 Final Question:\n### {final_question}")
-            st.balloons()
-            st.audio(generate_spin_sound(), format="audio/wav")
+            st.session_state["current_spin_question"] = final_question
+            
+            # Show balloons only on last spin (7th spin)
+            if is_last_spin:
+                st.balloons()
+            
+            # Rerun to show updated question
+            st.rerun()
 
-        current_question = config_sheet.acell("A1").value
+        # Display the current question persistently until next spin
+        current_question = st.session_state.get("current_spin_question") or config_sheet.acell("A1").value
 
         if current_question:
             st.write("### 📌 Current Question")
             st.success(current_question)
+            
+            # Show spin count indicator
+            st.caption(f"🎡 Spins: {st.session_state['spin_count']}/7")
 
             user_input = st.text_area("💬 Your response")
 
