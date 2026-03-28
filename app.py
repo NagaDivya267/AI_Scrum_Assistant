@@ -482,6 +482,10 @@ with tab3:
 with tab4:
     st.subheader("👑 Scrum Master Dashboard")
 
+    col_refresh, _ = st.columns([1, 5])
+    if col_refresh.button("🔄 Refresh Data"):
+        st.rerun()
+
     try:
         config_sheet = get_or_create_worksheet(CONFIG_WORKSHEET_NAME, rows=20, cols=5)
         response_sheet = get_or_create_worksheet(RESPONSES_WORKSHEET_NAME, rows=500, cols=10)
@@ -558,56 +562,81 @@ with tab4:
                     st.info("No discussion points saved yet.")
 
                 # ---- AI Analysis ----
-                st.write("### 🤖 AI Analysis")
-                if st.button("Generate AI Insights", key=f"ai_insights_{selected_question}"):
+                st.write("### 🤖 AI Scrum Master Analysis")
+                if st.button("Generate Smart Insights", key=f"ai_insights_{selected_question}"):
                     api_key, key_source, secret_keys = get_openai_api_key()
                     if not api_key:
                         st.error("OpenAI key is missing. Add OPENAI_API_KEY in Streamlit secrets and restart the app.")
                         st.caption(
                             f"Diagnostics: key_source={key_source}; top_level_secrets={', '.join(secret_keys) if secret_keys else 'none'}"
                         )
-                    elif filtered_discussion.empty:
-                        st.warning("No discussion data available")
                     else:
-                        st.caption(f"Using OpenAI key from {key_source}")
-                        discussion_text = "\n".join(
-                            filtered_discussion["Discussion"].dropna().astype(str).tolist()
-                        ).strip()
+                        sprint_df = st.session_state.get("sprint_df", pd.DataFrame())
+                        has_sprint = not sprint_df.empty
+                        has_discussion = not filtered_discussion.empty
 
-                        if not discussion_text:
-                            st.warning("No discussion data available")
+                        if not has_sprint and not has_discussion:
+                            st.warning("Please ensure sprint data and/or discussion data are available.")
                         else:
-                            # Keep payload bounded for predictable latency/cost.
-                            discussion_text = discussion_text[:8000]
-                            prompt = f"""
-You are a highly experienced Scrum Master working with Agile teams.
+                            # Build sprint summary using actual column names
+                            sprint_summary = ""
+                            if has_sprint:
+                                for _, srow in sprint_df.tail(6).iterrows():
+                                    committed = srow.get("Committed", 0) or 0
+                                    scope_added = srow.get("Scope Added", 0) or 0
+                                    scope_pct = round((scope_added / committed * 100), 1) if committed > 0 else 0
+                                    sprint_summary += (
+                                        f"Sprint: {srow.get('Sprint', 'N/A')} | "
+                                        f"Committed: {committed} | "
+                                        f"Completed: {srow.get('Completed', 0)} | "
+                                        f"Scope Added: {scope_added} | "
+                                        f"Scope Change: {scope_pct}% | "
+                                        f"Spill Over: {srow.get('Spill Over', 0)}\n"
+                                    )
 
-Analyze ONLY the discussion provided below. Do NOT assume anything beyond this data.
+                            discussion_text = ""
+                            if has_discussion:
+                                discussion_text = "\n".join(
+                                    filtered_discussion["Discussion"].dropna().astype(str).tolist()
+                                ).strip()[:8000]
 
-Discussion:
-{discussion_text}
+                            prompt = f"""You are a highly experienced Scrum Master analyzing sprint performance.
 
-Instructions:
-- Be precise and practical
-- Do NOT hallucinate or invent problems
-- Base every insight ONLY on the provided inputs
-- Keep language simple, human-like, and relatable
-- Avoid generic statements
+Use ONLY the data provided. Do NOT assume anything.
 
-If the data is insufficient, say: "Not enough data to derive insight"
+--- Sprint Metrics (Last 6 Sprints) ---
+{sprint_summary if sprint_summary else "No sprint data provided."}
+
+--- Team Discussions ---
+{discussion_text if discussion_text else "No discussion data provided."}
+
+Your task:
+1. Correlate sprint performance with team discussions
+2. Identify real patterns (not generic)
+3. Explain WHY issues are happening
+4. Suggest practical improvements
+
+Rules:
+- Be specific and realistic
+- Avoid generic Agile textbook answers
+- No hallucination
+- If data is weak, say "insufficient data"
 
 Output format:
 
-🔍 Key Themes:
+📊 Sprint Performance Insight:
 - ...
 
-⚠️ Observed Problems:
+🧠 Team Sentiment Insight:
 - ...
 
-✅ Positive Signals:
+🔗 Root Cause Analysis:
 - ...
 
-🎯 Actionable Improvements:
+⚠️ Key Risks:
+- ...
+
+🚀 Actionable Recommendations:
 - ...
 - ...
 - ...
@@ -621,14 +650,13 @@ Output format:
                                         messages=[
                                             {
                                                 "role": "system",
-                                                "content": "You are a practical Scrum Master assistant. Only use provided discussion text.",
+                                                "content": "You are a practical Scrum Master assistant. Base insights only on provided data.",
                                             },
                                             {"role": "user", "content": prompt},
                                         ],
                                         temperature=0.2,
-                                        max_tokens=700,
+                                        max_tokens=900,
                                     )
-
                                 ai_output = response.choices[0].message.content or "Not enough data to derive insight"
                                 st.write("### 📊 AI Insights")
                                 st.markdown(ai_output)
