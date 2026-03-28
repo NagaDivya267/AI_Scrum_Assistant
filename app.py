@@ -331,11 +331,31 @@ with tab3:
             st.session_state["spin_count"] = 0
         if "current_spin_question" not in st.session_state:
             st.session_state["current_spin_question"] = None
+        if "used_questions" not in st.session_state:
+            st.session_state["used_questions"] = []
 
-        if st.button("🎯 Spin the Wheel"):
+        # Check if all spins are complete
+        spins_complete = st.session_state["spin_count"] >= 7
+        
+        # Disable spin button after 7 spins
+        spin_button = st.button("🎯 Spin the Wheel", disabled=spins_complete)
+
+        if spin_button and not spins_complete:
             # Increment spin count
             st.session_state["spin_count"] += 1
             is_last_spin = st.session_state["spin_count"] >= 7
+            
+            # Get remaining unused questions
+            remaining_questions = [q for q in spin_questions if q not in st.session_state["used_questions"]]
+            
+            # If all questions used, reset the list (shouldn't happen at 7 spins)
+            if not remaining_questions:
+                remaining_questions = spin_questions
+                st.session_state["used_questions"] = []
+            
+            # Pick final question from remaining
+            final_question = random.choice(remaining_questions)
+            st.session_state["used_questions"].append(final_question)
             
             # Generate and inject audio (autoplay during spinner)
             audio_data = generate_spin_sound()
@@ -350,8 +370,7 @@ with tab3:
             with st.spinner("🎡 Spinning the wheel..."):
                 time.sleep(1.5)
             
-            # Pick final question and save
-            final_question = random.choice(spin_questions)
+            # Save question to sheet
             config_sheet.update_acell("A1", final_question)
             st.session_state["current_spin_question"] = final_question
             
@@ -362,6 +381,10 @@ with tab3:
             # Rerun to show updated question
             st.rerun()
 
+        # Display spin completion status
+        if spins_complete:
+            st.success("✅ All 7 questions completed! Great job! 🎉")
+
         # Display the current question persistently until next spin
         current_question = st.session_state.get("current_spin_question") or config_sheet.acell("A1").value
 
@@ -369,30 +392,34 @@ with tab3:
             st.write("### 📌 Current Question")
             st.success(current_question)
             
-            # Show spin count indicator
-            st.caption(f"🎡 Spins: {st.session_state['spin_count']}/7")
+            # Show spin count indicator with progress
+            progress_text = f"Question {st.session_state['spin_count']}/7"
+            if st.session_state["spin_count"] >= 7:
+                progress_text += " ✨ FINAL!"
+            st.caption(f"🎡 {progress_text}")
 
-            user_input = st.text_area("💬 Your response")
+            if not spins_complete:  # Only show input if spins not complete
+                user_input = st.text_area("💬 Your response")
 
-            if st.button("Submit Response"):
-                if user_input.strip():
-                    existing_header = response_sheet.row_values(1)
-                    expected_header = ["Timestamp", "Question", "Response"]
+                if st.button("Submit Response"):
+                    if user_input.strip():
+                        existing_header = response_sheet.row_values(1)
+                        expected_header = ["Timestamp", "Question", "Response"]
 
-                    if existing_header != expected_header:
-                        response_sheet.clear()
-                        response_sheet.append_row(expected_header)
+                        if existing_header != expected_header:
+                            response_sheet.clear()
+                            response_sheet.append_row(expected_header)
 
-                    response_sheet.append_row([
-                        datetime.now().isoformat(),
-                        current_question,
-                        user_input.strip(),
-                    ])
-                    st.success("✅ Response submitted!")
-                else:
-                    st.warning("Please add something")
-        else:
-            st.warning("No question is selected yet. Hit Spin the Wheel first!")
+                        response_sheet.append_row([
+                            datetime.now().isoformat(),
+                            current_question,
+                            user_input.strip(),
+                        ])
+                        st.success("✅ Response submitted!")
+                    else:
+                        st.warning("Please add something")
+            else:
+                st.info("🎊 All responses collected! Session complete.")
     except Exception as error:
         st.error(f"Unable to load spin wheel data: {error}")
 
