@@ -17,8 +17,8 @@ from google.oauth2.service_account import Credentials
 tab1, tab2, tab3, tab4 = st.tabs([
     "😊 Mood",
     "📊 Sprint Insights",
-    "🎯 AI Questions",
-    "✅ Action Tracker"
+    "🎡 Spin Wheel",
+    "👑 Scrum Master Dashboard"
 ])
 with tab1:
     st.subheader("Team Mood Check")
@@ -421,47 +421,54 @@ with tab3:
             else:
                 st.info("🎊 All responses collected! Session complete.")
         
-        # ======================= SCRUM MASTER VIEW =======================
-        st.divider()
-        is_scrum_master = st.checkbox("👑 Scrum Master View")
-        
-        if is_scrum_master:
-            st.write("### 📊 Team Responses Dashboard")
-            
-            try:
-                # Read all responses from Google Sheet
-                data = response_sheet.get_all_records()
-                if data:
-                    df = pd.DataFrame(data)
-                    
-                    # Get current question from config
-                    current_question = config_sheet.acell("A1").value
-                    
-                    # Filter responses for current question
-                    if current_question:
-                        filtered_df = df[df["Question"] == current_question]
-                        
-                        if not filtered_df.empty:
-                            st.write(f"**Current Question:** {current_question}")
-                            st.write(f"**Responses Received:** {len(filtered_df)}")
-                            st.divider()
-                            
-                            # Display each response nicely
-                            st.write("### 🧾 Detailed Inputs")
-                            for i, row in filtered_df.iterrows():
-                                st.write(f"🗨️ {row['Response']}")
-                                st.write("---")
-                        else:
-                            st.info("No responses yet for this question.")
-                    else:
-                        st.warning("No current question set. Start spinning!")
-                else:
-                    st.info("No responses collected yet.")
-            except Exception as sm_error:
-                st.error(f"Unable to load scrum master view: {sm_error}")
     except Exception as error:
         st.error(f"Unable to load spin wheel data: {error}")
 
 with tab4:
-    st.subheader("Action Tracker")
-    st.info("Action Tracker setup is pending.")
+    st.subheader("👑 Scrum Master Dashboard")
+
+    try:
+        config_sheet = get_or_create_worksheet(CONFIG_WORKSHEET_NAME, rows=20, cols=5)
+        response_sheet = get_or_create_worksheet(RESPONSES_WORKSHEET_NAME, rows=500, cols=10)
+
+        # Load all response rows from Google Sheets.
+        data = response_sheet.get_all_records()
+        df = pd.DataFrame(data)
+
+        if df.empty:
+            st.warning("No responses yet")
+        else:
+            st.write("### 📊 All Team Responses")
+            st.dataframe(df, use_container_width=True)
+
+            st.write("### 🔍 Filter by Question")
+            questions = df["Question"].dropna().unique()
+
+            if len(questions) == 0:
+                st.info("No question data found in responses yet.")
+            else:
+                current_question = config_sheet.acell("A1").value
+                default_index = 0
+                if current_question and current_question in questions:
+                    default_index = list(questions).index(current_question)
+
+                selected_question = st.selectbox("Select Question", questions, index=default_index)
+                filtered_df = df[df["Question"] == selected_question]
+
+                st.write("### 🧾 Responses for Selected Question")
+                st.dataframe(filtered_df, use_container_width=True)
+
+                st.write("### 📈 Insights")
+                col1, col2 = st.columns(2)
+                col1.metric("Total Responses", len(df))
+                col2.metric("Unique Questions", df["Question"].nunique())
+
+                st.write("### 💬 Discussion View")
+                if filtered_df.empty:
+                    st.info("No responses for this question yet")
+                else:
+                    for _, row in filtered_df.iterrows():
+                        st.write(f"🟢 {row['Response']}")
+                        st.write("---")
+    except Exception as error:
+        st.error(f"Unable to load Scrum Master dashboard: {error}")
