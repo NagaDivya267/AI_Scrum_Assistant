@@ -87,6 +87,31 @@ spin_questions = [
 ]
 
 
+def get_openai_api_key() -> str | None:
+    # Support multiple secrets layouts used in Streamlit deployments.
+    candidates: list[str | None] = [
+        os.getenv("OPENAI_API_KEY"),
+        st.secrets.get("OPENAI_API_KEY") if "OPENAI_API_KEY" in st.secrets else None,
+        st.secrets.get("openai_api_key") if "openai_api_key" in st.secrets else None,
+    ]
+
+    if "openai" in st.secrets:
+        openai_section = st.secrets["openai"]
+        if hasattr(openai_section, "get"):
+            candidates.extend(
+                [
+                    openai_section.get("api_key"),
+                    openai_section.get("OPENAI_API_KEY"),
+                ]
+            )
+
+    for value in candidates:
+        if value and str(value).strip():
+            return str(value).strip()
+
+    return None
+
+
 @st.cache_data(show_spinner=False)
 def generate_spin_sound() -> bytes:
     """Synthesise a short spinning-wheel whoosh as WAV bytes (stdlib only)."""
@@ -507,9 +532,9 @@ with tab4:
                 # ---- AI Analysis ----
                 st.write("### 🤖 AI Analysis")
                 if st.button("Generate AI Insights", key=f"ai_insights_{selected_question}"):
-                    api_key = st.secrets.get("OPENAI_API_KEY")
+                    api_key = get_openai_api_key()
                     if not api_key:
-                        st.error("OPENAI_API_KEY is missing. Add it in Streamlit secrets.")
+                        st.error("OpenAI key is missing. Add OPENAI_API_KEY in Streamlit secrets and restart the app.")
                     elif filtered_discussion.empty:
                         st.warning("No discussion data available")
                     else:
