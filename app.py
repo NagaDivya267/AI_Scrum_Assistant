@@ -498,7 +498,7 @@ with tab4:
         if df.empty:
             st.warning("No responses yet")
         else:
-            st.write("###  Filter by Question")
+            st.write("### 🔍 Filter by Question")
             questions = df["Question"].dropna().unique()
 
             if len(questions) == 0:
@@ -629,13 +629,6 @@ Output format:
 
 🧠 Team Sentiment Insight:
 - ...
-
-🔗 Root Cause Analysis:
-- ...
-
-⚠️ Key Risks:
-- ...
-
 🚀 Actionable Recommendations:
 - ...
 - ...
