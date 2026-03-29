@@ -247,8 +247,9 @@ def show_flash_message(scope: str) -> None:
         st.info(message)
 
 
-def clear_session_keys(*keys: str) -> None:
-    for key in keys:
+def apply_pending_session_resets() -> None:
+    pending_keys = st.session_state.pop("_pending_session_resets", [])
+    for key in pending_keys:
         if key in st.session_state:
             value = st.session_state[key]
             if isinstance(value, str):
@@ -259,6 +260,13 @@ def clear_session_keys(*keys: str) -> None:
                 st.session_state[key] = 0.0
             elif isinstance(value, list):
                 st.session_state[key] = []
+
+
+def clear_session_keys(*keys: str) -> None:
+    pending_keys = st.session_state.setdefault("_pending_session_resets", [])
+    for key in keys:
+        if key not in pending_keys:
+            pending_keys.append(key)
 
 
 def get_mood_status(score: float) -> str:
@@ -432,6 +440,9 @@ def ensure_spill_over_column(df: pd.DataFrame) -> pd.DataFrame:
 def mark_sync_event(label: str) -> None:
     st.session_state["last_sync_time"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     st.session_state["last_sync_event"] = label
+
+
+apply_pending_session_resets()
 
 
 # Create Tabs
