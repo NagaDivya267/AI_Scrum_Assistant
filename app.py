@@ -252,10 +252,25 @@ def get_sprint_summary(df):
     if not required_columns.issubset(df.columns):
         return {}
 
+    # Normalize status values so different casings and synonyms all map correctly
+    DONE_VALUES = {"done", "completed", "complete", "closed", "resolved", "finished"}
+    IN_PROGRESS_VALUES = {"in progress", "inprogress", "in-progress", "active", "wip", "in development", "dev", "development"}
+    TODO_VALUES = {"to do", "todo", "not started", "open", "new", "backlog", "planned", "ready"}
+
+    def normalize_status(raw):
+        s = str(raw).strip().lower()
+        if s in DONE_VALUES:
+            return "Done"
+        if s in IN_PROGRESS_VALUES:
+            return "In Progress"
+        if s in TODO_VALUES:
+            return "To Do"
+        return "To Do"  # default unmapped statuses to To Do
+
     sprints = {}
     for _, row in df.iterrows():
         sprint = str(row['Sprint'])
-        status = str(row['Status']).strip()
+        status = normalize_status(row['Status'])
         story_points = pd.to_numeric(row['StoryPoints'], errors='coerce')
         story_points = int(story_points) if pd.notna(story_points) else 0
         
@@ -470,9 +485,10 @@ def get_completed_sprint_health(df):
     for sprint_name in completed_sprint_names:
         sprint_mask = df['Sprint'].astype(str).str.strip() == str(sprint_name).strip()
         sprint_df = df[sprint_mask]
+        _done_vals = {"done", "completed", "complete", "closed", "resolved", "finished"}
         committed_sp = pd.to_numeric(sprint_df['StoryPoints'], errors='coerce').fillna(0).sum()
         completed_sp = pd.to_numeric(
-            sprint_df[sprint_df['Status'].astype(str).str.strip().str.lower() == 'done']['StoryPoints'],
+            sprint_df[sprint_df['Status'].astype(str).str.strip().str.lower().isin(_done_vals)]['StoryPoints'],
             errors='coerce'
         ).fillna(0).sum()
 
@@ -525,12 +541,13 @@ def get_velocity_metrics(df):
         completed_sprint_names = [s for s in all_sprints if s != current_sprint]
 
     # Calculate Done SP per completed sprint
+    _done_vals = {"done", "completed", "complete", "closed", "resolved", "finished"}
     sprint_velocities = []
     for sprint_name in completed_sprint_names:
         sprint_mask = df['Sprint'].astype(str).str.strip() == str(sprint_name).strip()
         sprint_df = df[sprint_mask]
         done_sp = pd.to_numeric(
-            sprint_df[sprint_df['Status'].astype(str).str.strip().str.lower() == 'done']['StoryPoints'],
+            sprint_df[sprint_df['Status'].astype(str).str.strip().str.lower().isin(_done_vals)]['StoryPoints'],
             errors='coerce'
         ).fillna(0).sum()
         sprint_velocities.append(done_sp)
@@ -1014,6 +1031,9 @@ if df is not None:
         SPRINT_END_DATE = datetime.date(2026, 4, 7)
         SPRINT_DURATION_DAYS = 10
 
+        _done_status = {"done", "completed", "complete", "closed", "resolved", "finished"}
+        _todo_status = {"to do", "todo", "not started", "open", "new", "backlog", "planned", "ready"}
+
         if dpm_mode:
             committed_sp = pd.to_numeric(current_sprint_df["Committed"], errors="coerce").fillna(0).sum()
             completed_sp_summary = pd.to_numeric(current_sprint_df["Completed"], errors="coerce").fillna(0).sum()
@@ -1021,11 +1041,11 @@ if df is not None:
         else:
             committed_sp = pd.to_numeric(current_sprint_df["StoryPoints"], errors="coerce").sum() if not current_sprint_df.empty else 0
             completed_sp_summary = pd.to_numeric(
-                current_sprint_df.loc[current_sprint_df["Status"].astype(str).str.strip().str.lower() == "done", "StoryPoints"],
+                current_sprint_df.loc[current_sprint_df["Status"].astype(str).str.strip().str.lower().isin(_done_status), "StoryPoints"],
                 errors="coerce"
             ).sum() if not current_sprint_df.empty else 0
             todo_sp = pd.to_numeric(
-                current_sprint_df.loc[current_sprint_df["Status"].astype(str).str.strip().str.lower() == "to do", "StoryPoints"],
+                current_sprint_df.loc[current_sprint_df["Status"].astype(str).str.strip().str.lower().isin(_todo_status), "StoryPoints"],
                 errors="coerce"
             ).sum() if not current_sprint_df.empty else 0
 
@@ -1125,7 +1145,7 @@ box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
 
         active_df = current_sprint_df
         blocked = len(active_df[active_df['Blocked'].astype(str).str.strip().str.lower() == 'yes']) if not dpm_mode else 0
-        not_started = len(active_df[active_df['Status'].astype(str).str.strip().str.lower() == 'to do']) if not dpm_mode else 0
+        not_started = len(active_df[active_df['Status'].astype(str).str.strip().str.lower().isin(_todo_status)]) if not dpm_mode else 0
         remaining_pct = (remaining_sp / total_sp) * 100 if total_sp > 0 else 0
         blocked_pct = (blocked / len(active_df)) * 100 if len(active_df) > 0 else 0
         not_started_pct = (not_started / len(active_df)) * 100 if len(active_df) > 0 else 0
