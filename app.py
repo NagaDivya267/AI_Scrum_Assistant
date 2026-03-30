@@ -381,6 +381,39 @@ def get_completed_sprint_health(df):
     """Build sprint health metrics for completed sprints only."""
     health_rows = []
 
+    # DPM-style fallback: files with Sprint/Committed/Completed only.
+    if {"Sprint", "Committed", "Completed"}.issubset(df.columns):
+        storypoints_sum = pd.to_numeric(df.get("StoryPoints", 0), errors='coerce').fillna(0).sum() if "StoryPoints" in df.columns else 0
+        status_all_todo = df["Status"].astype(str).str.strip().str.lower().eq("to do").all() if "Status" in df.columns else True
+
+        if storypoints_sum == 0 or status_all_todo:
+            dpm_df = df[["Sprint", "Committed", "Completed"]].copy()
+            dpm_df["Committed"] = pd.to_numeric(dpm_df["Committed"], errors='coerce').fillna(0)
+            dpm_df["Completed"] = pd.to_numeric(dpm_df["Completed"], errors='coerce').fillna(0)
+            grouped = dpm_df.groupby("Sprint", as_index=False)[["Committed", "Completed"]].sum()
+            grouped = grouped.sort_values(by="Sprint", key=lambda s: s.map(extract_sprint_number))
+
+            for _, row in grouped.iterrows():
+                committed_sp = float(row["Committed"])
+                completed_sp = float(row["Completed"])
+                predictability = (completed_sp / committed_sp * 100) if committed_sp > 0 else 0
+                spillover = max(0, 100 - predictability)
+                sprint_health = predictability
+
+                health_rows.append({
+                    "Sprint": row["Sprint"],
+                    "Committed SP": committed_sp,
+                    "Completed SP": completed_sp,
+                    "Predictability %": round(predictability, 2),
+                    "Spillover %": round(spillover, 2),
+                    "Scope Change %": 0,
+                    "Defect Leakage %": 0,
+                    "Sprint Health %": round(sprint_health, 2),
+                    "Status": get_health_status(sprint_health)
+                })
+
+            return pd.DataFrame(health_rows)
+
     required_columns = {"Sprint", "StoryPoints", "Status"}
     if not required_columns.issubset(df.columns):
         return pd.DataFrame(health_rows)
