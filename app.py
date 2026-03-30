@@ -1298,8 +1298,14 @@ if df is not None:
                         f"{sprint['Sprint']}",
                         ha="left",
                         va="center",
-                        fontsize=8,
-                        color="#f8fafc",
+                        fontsize=6,
+                        color="#0f172a",
+                        bbox=dict(
+                            boxstyle="round,pad=0.08",
+                            facecolor="#f8fafc",
+                            edgecolor="none",
+                            alpha=0.9,
+                        ),
                     )
 
                 ax.set_aspect("equal")
