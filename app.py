@@ -786,14 +786,6 @@ if df is not None:
         col3.metric("Remaining SP", metrics["remaining_sp"])
         col4.metric("Risk %", f"{metrics['risk']}%")
 
-        # --- BREAKDOWN ---
-        st.subheader("📉 Risk Breakdown")
-        b1, b2, b3, b4 = st.columns(4)
-        b1.metric("Remaining Work %", f"{metrics['remaining_pct']}%")
-        b2.metric("Blocked %", f"{metrics['blocker_pct']}%")
-        b3.metric("Not Started %", f"{metrics['not_started_pct']}%")
-        b4.metric("Velocity Gap %", f"{metrics['velocity_gap_pct']}%")
-
         # --- CURRENT SPRINT SUMMARY (date-based burn rate) ---
         st.markdown("---")
         st.subheader("📅 Current Sprint Spillover Prediction")
