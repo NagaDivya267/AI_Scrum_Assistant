@@ -204,10 +204,47 @@ def read_from_csv():
     """Read data from CSV file into DataFrame"""
     try:
         df = pd.read_csv(csv_file)
+        df = normalize_dataframe_columns(df)
         return df
     except Exception as e:
         st.error(f"Error reading CSV: {e}")
         return None
+
+def normalize_dataframe_columns(df):
+    """Clean and normalize common column name variants from uploaded files."""
+    df = df.copy()
+    df.columns = [str(col).replace("\ufeff", "").strip() for col in df.columns]
+
+    alias_map = {
+        "sprint": "Sprint",
+        "sprintname": "Sprint",
+        "status": "Status",
+        "state": "Status",
+        "storypoints": "StoryPoints",
+        "storypoint": "StoryPoints",
+        "sp": "StoryPoints",
+        "blocked": "Blocked",
+        "story": "Story",
+        "committed": "Committed",
+        "commitment": "Committed",
+        "completed": "Completed",
+        "done": "Completed",
+        "sprintstatus": "SprintStatus",
+    }
+
+    rename_map = {}
+    existing = set(df.columns)
+    for col in list(df.columns):
+        normalized_key = re.sub(r"[^a-z0-9]", "", col.lower())
+        canonical = alias_map.get(normalized_key)
+        if canonical and canonical not in existing and col != canonical:
+            rename_map[col] = canonical
+            existing.add(canonical)
+
+    if rename_map:
+        df = df.rename(columns=rename_map)
+
+    return df
 
 def get_sprint_summary(df):
     """Generate summary statistics from DataFrame"""
@@ -782,19 +819,30 @@ Be concise, practical, and focused on what matters most for sprint success."""
 
 # Read data from uploaded file (if available), else fallback to default CSV
 df = None
+data_source_label = "default CSV"
 if uploaded_file is not None:
     try:
         if uploaded_file.name.lower().endswith(".csv"):
+            uploaded_file.seek(0)
             df = pd.read_csv(uploaded_file)
+            # Retry with semicolon for CSV exports that are not comma-separated.
+            if len(df.columns) == 1 and ";" in str(df.columns[0]):
+                uploaded_file.seek(0)
+                df = pd.read_csv(uploaded_file, sep=";")
         else:
+            uploaded_file.seek(0)
             df = pd.read_excel(uploaded_file)
-        st.sidebar.success("✅ Using uploaded sprint data")
+        df = normalize_dataframe_columns(df)
+        data_source_label = f"uploaded file: {uploaded_file.name}"
+        st.sidebar.success(f"✅ Using uploaded sprint data ({len(df)} rows)")
     except Exception as e:
         st.sidebar.error(f"❌ Upload error: {e}")
 
 if df is None:
+    if uploaded_file is not None:
+        st.error("Uploaded file could not be read. Please verify file format/columns. Default data was not used.")
+        st.stop()
     df = read_from_csv()
-    pass
 
 if df is not None:
     # Normalize uploaded data so tabs don't crash when optional sprint columns are missing.
@@ -815,6 +863,7 @@ if df is not None:
     # Tab 1: All Data
     with tab1:
         st.subheader("Sprint Data Table")
+        st.caption(f"Data source: {data_source_label}")
         st.dataframe(df, width='stretch', height=400)
         st.metric("Total Rows", len(df))
     
