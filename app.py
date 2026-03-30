@@ -1004,7 +1004,7 @@ if df is not None:
 </div>
 """, unsafe_allow_html=True)
 
-        # --- SPRINT HEALTH INDICATOR ---
+        # --- SPRINT HEALTH INDICATOR (compact traffic signal) ---
         if success_probability >= 85:
             signal_color = "#28a745"
             signal_label = "ON TRACK"
@@ -1025,6 +1025,31 @@ if df is not None:
   </span>
 </div>
 """, unsafe_allow_html=True)
+
+        # --- SPRINT SUCCESS INDICATOR (gauge chart) ---
+        st.subheader("🎯 Sprint Success Indicator")
+        import plotly.graph_objects as go
+        fig_gauge = go.Figure(go.Indicator(
+            mode="gauge+number",
+            value=success_probability,
+            title={'text': "Success Probability (%)"},
+            gauge={
+                'axis': {'range': [0, 100]},
+                'bar': {'color': "black"},
+                'steps': [
+                    {'range': [0, 60], 'color': "red"},
+                    {'range': [60, 85], 'color': "orange"},
+                    {'range': [85, 100], 'color': "green"},
+                ],
+                'threshold': {
+                    'line': {'color': "white", 'width': 4},
+                    'thickness': 0.75,
+                    'value': success_probability,
+                },
+            },
+        ))
+        fig_gauge.update_layout(margin=dict(t=40, b=10, l=10, r=10), height=280, paper_bgcolor="rgba(0,0,0,0)")
+        st.plotly_chart(fig_gauge, use_container_width=True)
 
         # --- AI INSIGHTS ---
         st.subheader("🧠 AI Recommendations")
