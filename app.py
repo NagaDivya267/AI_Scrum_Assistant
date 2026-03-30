@@ -748,70 +748,72 @@ def generate_ai_insights(df, project_context="agile software delivery", full_df=
         if velocity_gap_pct > VELOCITY_GAP_THRESHOLD:
             patterns.append("Velocity mismatch")
         pattern_text = ", ".join(patterns) if patterns else "No critical patterns detected"
+
+        # Immutable facts used to anchor LLM output and prevent contradictions.
+        immutable_facts = (
+            f"Completion={metrics['completion_rate']:.0f}%; "
+            f"CompletedSP={metrics['completed_sp']:.0f}; "
+            f"TotalSP={metrics['total_sp']:.0f}; "
+            f"RemainingSP={metrics['remaining_sp']:.0f}; "
+            f"BlockedItems={metrics['blocked_count']}; "
+            f"BlockedSP={metrics['blocked_sp']:.0f}; "
+            f"AvgVelocity={avg_velocity:.0f}; "
+            f"VelocityTrend={velocity_metrics['velocity_trend']}"
+        )
         
-        prompt = f"""You are a Senior Scrum Master and SAFe RTE with 12+ years of experience.
+        prompt = f"""You are a Senior Scrum Master and Delivery Coach.
 
-You are NOT an analyst. You are a DELIVERY COACH.
-You challenge the team. You do not give polite answers.
+    You must produce data-consistent coaching insights. Never contradict the provided facts.
 
-Your job:
-- Diagnose sprint health
-- Predict outcome
-- Give strict, practical actions
+    SPRINT DATA SNAPSHOT:
+    - Remaining Work: {remaining_pct:.0f}%
+    - Blocked Work: {blocker_pct:.0f}%
+    - Not Started Work: {not_started_pct:.0f}%
+    - Velocity Gap: {velocity_gap_pct:.0f}%
+    - Risk Level: {risk_pct:.0f}%
+    - Current Completion: {metrics['completion_rate']:.0f}%
+    - Blocked Items: {metrics['blocked_count']}
+    - Average Predictability (last sprints): {avg_predictability:.0f}%
+    - Velocity Trend: {velocity_metrics['velocity_trend']}
+    - Average Velocity: {avg_velocity:.0f} SP
+    - System Assessment: {sprint_verdict}
+    - Detected Patterns: {pattern_text}
 
-SPRINT DATA:
+    IMMUTABLE FACTS (must not be contradicted):
+    {immutable_facts}
 
-Remaining Work: {remaining_pct:.0f}%
-Blocked Work: {blocker_pct:.0f}%
-Not Started Work: {not_started_pct:.0f}%
-Velocity Gap: {velocity_gap_pct:.0f}%
-Risk Level: {risk_pct:.0f}%
-Current Completion: {metrics['completion_rate']:.0f}%
-Blocked Items: {metrics['blocked_count']}
-Average Predictability (last sprints): {avg_predictability:.0f}%
-Velocity Trend: {velocity_metrics['velocity_trend']}
-Average Velocity: {avg_velocity:.0f} SP
-System Assessment: {sprint_verdict}
-Detected Patterns: {pattern_text}
+    Hard constraints:
+    - If Completion > 0, NEVER say "zero completion" or "no progress".
+    - If BlockedItems = 0, do not claim blockers are the primary current root cause.
+    - Keep numbers aligned with the snapshot.
 
----
+    Respond in this format:
+    🚦 SPRINT VERDICT:
 
-Respond STRICTLY in this format:
+    🔍 ROOT CAUSE:
 
-🚦 SPRINT VERDICT:
-(Will sprint succeed or fail? Be bold.)
+    ⚠️ DELIVERY RISKS:
+    -
 
-🔍 ROOT CAUSE:
-(Top 2–3 real reasons — no generic statements)
+    🎯 ACTION PLAN (Scrum Master must do tomorrow):
+    1.
+    2.
+    3.
 
-⚠️ DELIVERY RISKS:
-- (Specific, data-driven risks)
+    📈 IMPACT IF ACTION TAKEN:
 
-🎯 ACTION PLAN (Scrum Master must do tomorrow):
-1.
-2.
-3.
-
-📈 IMPACT IF ACTION TAKEN:
-(What improvement will happen in % terms)
-
----
-
-Rules:
-- Be direct, no fluff
-- No generic agile theory
-- Use numbers from data
-- Sound like a real Scrum Master in a tough sprint
-- Do NOT exceed 150 words
-- Avoid repeating metrics
-- Be crisp and assertive"""
+    Rules:
+    - Be direct and practical
+    - No generic agile theory
+    - Use data-backed statements
+    - Max 150 words"""
         
         with st.spinner("🧠 AI is analyzing your sprint data..."):
             try:
                 response = client.chat.completions.create(
                     model="llama-3.3-70b-versatile",  # Fast, stable, and supported
                     messages=[{"role": "user", "content": prompt}],
-                    temperature=0.7,
+                    temperature=0.35,
                     max_tokens=1200
                 )
             except Exception as e:
@@ -820,11 +822,45 @@ Rules:
                 response = client.chat.completions.create(
                     model="llama-3.1-8b-instant",
                     messages=[{"role": "user", "content": prompt}],
-                    temperature=0.7,
+                    temperature=0.35,
                     max_tokens=1200
                 )
-        
-        return response.choices[0].message.content
+
+        ai_text = response.choices[0].message.content
+
+        # Sanity guard: retry once with corrective instruction if output contradicts known facts.
+        lower_text = ai_text.lower()
+        contradiction = False
+        if metrics['completion_rate'] > 0 and (
+            "zero completion" in lower_text
+            or "no progress" in lower_text
+            or "0% completion" in lower_text
+        ):
+            contradiction = True
+
+        if contradiction:
+            corrective_prompt = (
+                prompt
+                + "\n\nYour previous response contradicted immutable facts. "
+                + "Regenerate with strict consistency to the provided metrics."
+            )
+            try:
+                response = client.chat.completions.create(
+                    model="llama-3.3-70b-versatile",
+                    messages=[{"role": "user", "content": corrective_prompt}],
+                    temperature=0.2,
+                    max_tokens=1200
+                )
+            except Exception:
+                response = client.chat.completions.create(
+                    model="llama-3.1-8b-instant",
+                    messages=[{"role": "user", "content": corrective_prompt}],
+                    temperature=0.2,
+                    max_tokens=1200
+                )
+            ai_text = response.choices[0].message.content
+
+        return ai_text
     
     except Exception as e:
         st.error(f"❌ Error calling Groq API: {str(e)}")
