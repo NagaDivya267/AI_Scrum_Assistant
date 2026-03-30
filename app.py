@@ -550,6 +550,9 @@ def get_velocity_metrics(df):
             sprint_df[sprint_df['Status'].astype(str).str.strip().str.lower().isin(_done_vals)]['StoryPoints'],
             errors='coerce'
         ).fillna(0).sum()
+        # DPM fallback: if story-level gives 0 but Completed column exists, use it
+        if done_sp == 0 and 'Completed' in sprint_df.columns:
+            done_sp = pd.to_numeric(sprint_df['Completed'], errors='coerce').fillna(0).sum()
         sprint_velocities.append(done_sp)
 
     # Average velocity based on last 3 completed sprints
@@ -660,12 +663,26 @@ def prepare_llm_summary(df, full_df=None):
     - Velocity Trend: {velocity_metrics['velocity_trend']}
     """
 
+    # Build historical sprint data — prefer story-level Done SP, fall back to Committed/Completed
+    all_sprint_names = sorted(full_df['Sprint'].dropna().astype(str).unique(), key=extract_sprint_number)
     sprints_summary = get_sprint_summary(full_df)
-    if sprints_summary:
+    _done_vals_h = {"done", "completed", "complete", "closed", "resolved", "finished"}
+    if all_sprint_names:
         summary += "\n    HISTORICAL SPRINT DATA:\n"
-        for sprint_name, stats in sorted(sprints_summary.items()):
-            sprint_completion = (stats['Done'] / stats['Total'] * 100) if stats['Total'] > 0 else 0
-            summary += f"\n    {sprint_name}: {stats['Done']}/{stats['Total']} points completed ({sprint_completion:.0f}%)"
+        for sprint_name in all_sprint_names:
+            sm = full_df['Sprint'].astype(str).str.strip() == str(sprint_name).strip()
+            sp_df = full_df[sm]
+            # Story-level
+            stats = sprints_summary.get(sprint_name, {})
+            done = stats.get('Done', 0)
+            total = stats.get('Total', 0)
+            # DPM fallback for sprints where story-level SP is 0
+            if total == 0 and 'Committed' in sp_df.columns:
+                total = pd.to_numeric(sp_df['Committed'], errors='coerce').fillna(0).sum()
+            if done == 0 and 'Completed' in sp_df.columns:
+                done = pd.to_numeric(sp_df['Completed'], errors='coerce').fillna(0).sum()
+            sprint_completion = (done / total * 100) if total > 0 else 0
+            summary += f"\n    {sprint_name}: {round(done)}/{round(total)} points completed ({sprint_completion:.0f}%)"
 
     if not blocked_items.empty and "Story" in blocked_items.columns:
         summary += "\n\n    BLOCKED ITEMS:\n"
