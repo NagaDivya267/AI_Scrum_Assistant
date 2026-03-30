@@ -81,7 +81,7 @@ div[data-testid="stMetricLabel"] {
 }
 div[data-testid="stMetricValue"] {
     color: #C9D1D9 !important;
-    font-size: 1.65rem !important;
+    font-size: 3rem !important;
     font-weight: 700 !important;
 }
 
