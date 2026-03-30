@@ -859,6 +859,8 @@ if df is not None:
         st.markdown("---")
         st.markdown("### 🔮 Predictive Analysis")
 
+        import plotly.graph_objects as go
+
         # Gauge — small, centered
         gauge_col1, gauge_col2, gauge_col3 = st.columns([1.5, 2, 1.5])
         with gauge_col2:
