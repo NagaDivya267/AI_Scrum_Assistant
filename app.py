@@ -764,8 +764,8 @@ Rules:
         st.error(f"❌ Error calling Groq API: {str(e)}")
         return None
 
-def chat_with_ai(df, user_question):
-    """Chat with AI about sprint data and provide suggestions"""
+def chat_with_ai(df, user_question, chat_history=None):
+    """Generative coaching chat grounded in sprint data."""
     api_key = get_api_key()
     
     if not api_key:
@@ -775,42 +775,77 @@ def chat_with_ai(df, user_question):
         client = Groq(api_key=api_key)
         
         summary = prepare_llm_summary(df)
-        
-        prompt = f"""You are a Delivery Manager + Scrum Master + Agile Coach with 10+ years of experience.
 
-When answering:
-- Always diagnose before suggesting
-- Use sprint data
-- Give actionable steps
-- Avoid generic advice
+        history_block = ""
+        if chat_history:
+            tail_history = chat_history[-6:]
+            history_lines = []
+            for msg in tail_history:
+                role = str(msg.get("role", "user")).upper()
+                content = str(msg.get("content", "")).strip()
+                if content:
+                    history_lines.append(f"{role}: {content}")
+            if history_lines:
+                history_block = "\nRECENT CHAT CONTEXT:\n" + "\n".join(history_lines)
+
+        prompt = f"""You are an expert Scrum Master and Team Coach.
+
+Your behavior:
+- Be generative and coaching-first, not rule-based
+- Diagnose root causes before giving solutions
+- Use sprint evidence and agile principles together
+- Identify anti-patterns and call them out clearly
+- Recommend practical next actions for Scrum Masters, PO, and team
+- Help decision-making with trade-offs (scope, quality, timeline, focus)
+
+Agile anti-pattern examples to detect when relevant:
+- Too much carryover between sprints
+- Daily Scrum becoming status reporting to manager
+- Work started but not finished (high WIP)
+- Stories entering sprint without refinement/DoR
+- High blocker aging or unresolved dependencies
+- Late testing and batch handoffs
+- Velocity gaming or overcommitment
+
+Decision support style:
+- Give a clear recommendation
+- Include 2 alternatives and when to choose each
+- Mention risks if no action is taken
 
 SPRINT DATA CONTEXT:
 {summary}
+{history_block}
 
 USER QUESTION: {user_question}
 
-Based on the sprint data, answer the user's question comprehensively.
+Respond in this structure:
+1) Coach Verdict
+2) Evidence from Data
+3) Anti-patterns observed (if any)
+4) Recommended action plan (next 24h and this sprint)
+5) Decision options and trade-offs
+6) Expected impact and what to monitor
 
-If they ask about:
-- **Sprint Goal Achievement**: Analyze completion rate, velocity, and blockers to predict if they'll meet the goal
-- **Key Risks**: Identify top 3-5 risks based on blocked items, incomplete work, and velocity trends
-- **Scrum Master Actions**: Provide specific, actionable steps they can take immediately
-- **Problem Solving**: Suggest root causes and solutions based on the data
+Constraints:
+- Keep response practical and specific
+- Use numbers from data when available
+- Avoid generic textbook agile advice
+- Keep under 220 words unless user asks for deep dive"""
 
-Always include:
-1. **Direct Answer** - Clear, data-backed response
-2. **Supporting Data** - Use specific numbers from their sprint
-3. **Action Items** - 2-3 concrete steps to take
-4. **Success Metrics** - How to measure if actions worked
-
-Be concise, practical, and focused on what matters most for sprint success."""
-        
-        response = client.chat.completions.create(
-            model="llama-3.1-8b-instant",  # Fast, stable, and actively supported
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.7,
-            max_tokens=1200
-        )
+        try:
+            response = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.7,
+                max_tokens=1200
+            )
+        except Exception:
+            response = client.chat.completions.create(
+                model="llama-3.1-8b-instant",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.7,
+                max_tokens=1200
+            )
         
         return response.choices[0].message.content
     
@@ -858,8 +893,8 @@ if df is not None:
         df['Story'] = ''
 
 if df is not None:
-    # Create tabs with new AI Insights tab and Chat tab
-    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["📊 All Data", "📈 Sprint Summary", "🎯 Metrics", "🧠 AI Insights", "💬 Chat", "🅳 DPM"])
+    # Create tabs
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 All Data", "📈 Sprint Summary", "🎯 Metrics", "🧠 AI Coach", "🅳 DPM"])
     # Tab 1: All Data
     with tab1:
         st.subheader("Sprint Data Table")
@@ -1155,9 +1190,9 @@ box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
             - Confidence Score = `0.5 × Predictability - 0.3 × Spillover`
             """)
     
-    # Tab 4: AI Insights
+    # Tab 4: AI Coach (Insights + Chat)
     with tab4:
-        st.markdown("## 🧠 AI Delivery Coach")
+        st.markdown("## 🧠 AI Delivery Coach & Copilot")
         st.markdown("*Powered by Groq — Senior Scrum Master + SAFe RTE perspective*")
 
         # Check if API key is configured
@@ -1234,19 +1269,16 @@ box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
                 st.markdown(st.session_state.ai_insights)
             else:
                 st.info("💡 Click 'Generate AI Insights' to get a data-driven coaching verdict from your AI Delivery Coach.")
-    
-    # Tab 5: Chat
-    with tab5:
-        st.subheader("🤖 Ask Delivery Copilot")
-        
-        if not os.getenv("GROQ_API_KEY"):
-            st.info("📝 Please enter your Groq API key in the sidebar (⚙️ Configuration) to use the chat.")
-        else:
+
+            st.markdown("---")
+            st.subheader("🤖 Ask Delivery Copilot")
+            st.caption("Generative AI coach for Scrum Masters and teams: anti-pattern detection, agile practices, and decision support.")
             st.markdown("""
             **Ask me anything about your sprint!**
             - "How can we improve our velocity?"
             - "What should we do about the blocked items?"
             - "Which sprint is at risk?"
+            - "Which agile anti-patterns do you see and what should I change this week?"
             """)
             
             # Quick question suggestion buttons
@@ -1285,7 +1317,7 @@ box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
                     st.markdown(preset_question)
                 with st.chat_message("assistant"):
                     with st.spinner("🤔 Thinking..."):
-                        response = chat_with_ai(df, preset_question)
+                        response = chat_with_ai(df, preset_question, st.session_state.chat_history)
                         st.markdown(response)
                 st.session_state.chat_history.append({"role": "assistant", "content": response})
 
@@ -1303,14 +1335,14 @@ box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
                 # Get AI response
                 with st.chat_message("assistant"):
                     with st.spinner("🤔 Thinking..."):
-                        response = chat_with_ai(df, user_input)
+                        response = chat_with_ai(df, user_input, st.session_state.chat_history)
                         st.markdown(response)
                     
                     # Add assistant response to history
                     st.session_state.chat_history.append({"role": "assistant", "content": response})
 
-    # Tab 6: Delivery Performance Metrics
-    with tab6:
+    # Tab 5: Delivery Performance Metrics
+    with tab5:
         st.subheader("🅳 Delivery Performance Metrics")
 
         dpm_uploaded_file = st.file_uploader(
