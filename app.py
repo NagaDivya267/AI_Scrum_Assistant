@@ -736,32 +736,15 @@ if df is not None:
     
     # Tab 2: Sprint Summary
     with tab2:
-        st.subheader("Sprint Completion Status")
-        sprints_summary = get_sprint_summary(df)
-        
-        cols = st.columns(len(sprints_summary))
-        for idx, (sprint_name, stats) in enumerate(sorted(sprints_summary.items())):
-            with cols[idx]:
-                completion = (stats["Done"] / stats["Total"] * 100) if stats["Total"] > 0 else 0
-                st.metric(
-                    label=sprint_name,
-                    value=f"{completion:.0f}%",
-                    delta=f"{stats['Done']}/{stats['Total']} pts"
-                )
-        
-        # Detailed summary
-        st.subheader("Detailed Sprint Breakdown")
-        for sprint_name, stats in sorted(sprints_summary.items()):
-            with st.expander(f"{sprint_name} - {stats['Done']}/{stats['Total']} pts"):
-                col1, col2, col3, col4 = st.columns(4)
-                with col1:
-                    st.metric("Total Points", stats["Total"])
-                with col2:
-                    st.metric("✅ Done", stats["Done"])
-                with col3:
-                    st.metric("🔄 In Progress", stats["In Progress"])
-                with col4:
-                    st.metric("⏳ To Do", stats["To Do"])
+        st.subheader("🏁 Sprint Health Summary")
+        completed_health_df_tab2 = get_completed_sprint_health(df)
+        if not completed_health_df_tab2.empty:
+            st.dataframe(
+                completed_health_df_tab2[["Sprint", "Sprint Health %", "Status", "Predictability %"]].reset_index(drop=True),
+                use_container_width=True,
+            )
+        else:
+            st.info("No completed sprints found yet. Sprint health status will appear once a sprint reaches 100% completion.")
     
     # Tab 3: Metrics
     with tab3:
@@ -771,14 +754,7 @@ if df is not None:
         # --- SPRINT METRICS ---
         st.markdown("### 📊 Sprint Metrics")
 
-        # --- COMPLETED SPRINT HEALTH ---
-        st.subheader("🏁 Sprint Health Status (Completed Sprints)")
         completed_health_df = get_completed_sprint_health(df)
-
-        if not completed_health_df.empty:
-            st.dataframe(completed_health_df[["Sprint", "Sprint Health %", "Status", "Predictability %"]].reset_index(drop=True), use_container_width=True)
-        else:
-            st.info("No completed sprints found yet. Sprint health status will appear once a sprint reaches 100% completion.")
 
         # --- METRICS ---
         st.subheader(f"🚦 Current Sprint Health Status ({current_sprint_name})" if current_sprint_name else "🚦 Current Sprint Health Status")
