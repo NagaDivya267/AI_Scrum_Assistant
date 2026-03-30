@@ -790,30 +790,6 @@ if df is not None:
         col3.metric("Remaining SP", metrics["remaining_sp"])
         col4.metric("Risk %", f"{metrics['risk']}%")
 
-        # ── 2. PIE CHART — Committed / Completed / Remaining ─────────────
-        st.markdown("---")
-        import plotly.graph_objects as go
-        pie_fig = go.Figure(go.Pie(
-            labels=["Completed", "Remaining"],
-            values=[completed_sp, remaining_sp],
-            hole=0.5,
-            marker_colors=["#28a745", "#dc3545"],
-            textinfo="label+percent",
-            textfont_size=11,
-        ))
-        pie_fig.update_layout(
-            title_text=f"SP Distribution (Committed: {total_sp})",
-            title_font_size=13,
-            height=260,
-            margin=dict(t=40, b=10, l=10, r=10),
-            paper_bgcolor="rgba(0,0,0,0)",
-            showlegend=True,
-            legend=dict(font_size=10),
-        )
-        pie_col1, pie_col2, pie_col3 = st.columns([1, 2, 1])
-        with pie_col2:
-            st.plotly_chart(pie_fig, use_container_width=True)
-
         # ── 3. CURRENT SPRINT SPILLOVER PREDICTION — line chart ──────────
         st.markdown("---")
         st.subheader("📅 Current Sprint Spillover Prediction")
@@ -847,6 +823,7 @@ if df is not None:
         actual_line[days_elapsed] = remaining_sp_summary
 
         day_labels = [f"D{d}" for d in range(SPRINT_DURATION_DAYS + 1)]
+        import plotly.graph_objects as go
         burn_fig = go.Figure()
         burn_fig.add_trace(go.Scatter(
             x=day_labels, y=ideal_line, mode="lines",
