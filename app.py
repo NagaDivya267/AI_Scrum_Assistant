@@ -909,14 +909,6 @@ if df is not None:
         kf2.metric("⚠️ Risk Index", round(risk_index, 1))
         kf3.metric("🎯 Confidence Score", f"{round(confidence_score, 1)}%")
 
-        # Forecast vs Actual chart
-        st.subheader("📈 Forecast vs Actual")
-        chart_df = pd.DataFrame({
-            "Metric": ["Committed", "Forecasted", "Completed"],
-            "Value": [total_sp, round(predicted_completion_sp, 1), completed_sp],
-        })
-        st.bar_chart(chart_df.set_index("Metric"))
-
         # Key insight
         st.subheader("🧠 Key Insight")
         if success_probability > 85:
