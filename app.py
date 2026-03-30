@@ -1112,21 +1112,12 @@ box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
             - 🔴 **<60%** — High risk, immediate action required
             """)
 
-        # Key insight
-        st.subheader("🧠 Key Insight")
-        if success_probability > 85:
-            st.success("🟢 Sprint is on track. Maintain current pace.")
-        elif success_probability > 60:
-            st.warning("🟡 Moderate risk. Focus on high-priority stories.")
-        else:
-            st.error("🔴 High risk of spillover. Immediate intervention required.")
-
         # --- WHAT IF SIMULATION ---
         st.markdown("---")
         st.subheader("🔮 What-If Analysis")
         extra_sp = st.slider("If additional SP completed:", 0, 30, 5)
 
-        sim_completed = completed_sp + extra_sp
+        sim_completed = min(total_sp, completed_sp + extra_sp)
         sim_remaining = max(0, total_sp - sim_completed)
         sim_predictability = (sim_completed / total_sp * 100) if total_sp > 0 else 0
         sim_spillover = (sim_remaining / total_sp * 100) if total_sp > 0 else 0
@@ -1151,6 +1142,32 @@ box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
             f"👉 Completing +{extra_sp} SP improves predictability to {round(sim_predictability)}% "
             f"and reduces spillover to {round(sim_spillover)}%"
         )
+
+        with st.expander("🧮 What-If Calculation Snapshot", expanded=False):
+            st.markdown("""
+            **How this block is calculated**
+
+            - Simulated Completed SP = `min(Total SP, Completed SP + Additional SP)`
+            - Simulated Remaining SP = `max(0, Total SP - Simulated Completed SP)`
+            - Predictability % = `(Simulated Completed SP / Total SP) × 100`
+            - Spillover Risk % = `(Simulated Remaining SP / Total SP) × 100`
+            - Sprints Needed = `Simulated Remaining SP / Average Velocity`
+            - Confidence Score = `0.5 × Predictability - 0.3 × Spillover`
+            """)
+
+            snapshot_df = pd.DataFrame([
+                {"Input / Output": "Total SP", "Value": round(total_sp, 2)},
+                {"Input / Output": "Completed SP (Current)", "Value": round(completed_sp, 2)},
+                {"Input / Output": "Additional SP (Slider)", "Value": round(extra_sp, 2)},
+                {"Input / Output": "Average Velocity", "Value": round(avg_velocity, 2)},
+                {"Input / Output": "Simulated Completed SP", "Value": round(sim_completed, 2)},
+                {"Input / Output": "Simulated Remaining SP", "Value": round(sim_remaining, 2)},
+                {"Input / Output": "Predictability %", "Value": round(sim_predictability, 2)},
+                {"Input / Output": "Spillover Risk %", "Value": round(sim_spillover, 2)},
+                {"Input / Output": "Sprints Needed", "Value": round(sprints_needed, 2)},
+                {"Input / Output": "Confidence Score", "Value": round(sim_confidence, 2)},
+            ])
+            st.dataframe(snapshot_df, use_container_width=True, hide_index=True)
     
     # Tab 4: AI Insights
     with tab4:
