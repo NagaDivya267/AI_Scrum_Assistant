@@ -823,29 +823,18 @@ if df is not None:
         actual_line[days_elapsed] = remaining_sp_summary
 
         day_labels = [f"D{d}" for d in range(SPRINT_DURATION_DAYS + 1)]
-        import plotly.graph_objects as go
-        burn_fig = go.Figure()
-        burn_fig.add_trace(go.Scatter(
-            x=day_labels, y=ideal_line, mode="lines",
-            name="Ideal Burndown", line=dict(color="#6C63FF", dash="dash", width=2),
-        ))
-        burn_fig.add_trace(go.Scatter(
-            x=day_labels[:days_elapsed + 1],
-            y=[v for v in actual_line[:days_elapsed + 1] if v is not None],
-            mode="lines+markers", name="Actual Remaining",
-            line=dict(color="#00D4AA", width=2), marker=dict(size=5),
-        ))
-        burn_fig.update_layout(
-            height=220, margin=dict(t=20, b=20, l=10, r=10),
-            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-            legend=dict(font_size=10), xaxis=dict(showgrid=False),
-            yaxis=dict(showgrid=True, gridcolor="#1e293b", title="SP Remaining"),
-        )
-        st.plotly_chart(burn_fig, use_container_width=True)
+        
+        # 5-card metric view
+        cs1, cs2, cs3, cs4, cs5 = st.columns(5)
+        cs1.metric("Committed SP", round(committed_sp))
+        cs2.metric("Ideal Burn Rate", f"{round(ideal_burn_rate)} SP/day")
+        cs3.metric("Completed SP", round(completed_sp_summary))
+        cs4.metric("Required Burn Rate", f"{round(required_burn_rate)} SP/day")
+        cs5.metric("Predictive Spillover Risk", f"{round(spillover_risk_pct)}%")
+
         st.caption(
-            f"Sprint end: {SPRINT_END_DATE} | {SPRINT_DURATION_DAYS}-day sprint | "
-            f"Remaining days: {max(0, remaining_days)} | Remaining SP: {round(remaining_sp_summary)} | "
-            f"Required burn: {round(required_burn_rate, 1)} SP/day | Spillover risk: {round(spillover_risk_pct)}%"
+            f"Sprint end: {SPRINT_END_DATE} | Sprint duration: {SPRINT_DURATION_DAYS} days | "
+            f"Remaining days: {max(0, remaining_days)} | Remaining SP: {round(remaining_sp_summary)}"
         )
 
         # ── 4. PREDICTIVE ANALYSIS ────────────────────────────────────────
