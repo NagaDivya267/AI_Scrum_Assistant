@@ -1005,38 +1005,24 @@ if df is not None:
 """, unsafe_allow_html=True)
 
         # --- SPRINT HEALTH INDICATOR ---
-        st.subheader("🚦 Sprint Health Indicator")
-
         if success_probability >= 85:
-            indicator_color = "#28a745"
-            indicator_gradient = "#1a7a4a"
-            indicator_text = "🟢 ON TRACK"
-            text_color = "white"
+            signal_color = "#28a745"
+            signal_label = "ON TRACK"
         elif success_probability >= 60:
-            indicator_color = "#ffc107"
-            indicator_gradient = "#a07800"
-            indicator_text = "🟡 AT RISK"
-            text_color = "black"
+            signal_color = "#ffc107"
+            signal_label = "AT RISK"
         else:
-            indicator_color = "#dc3545"
-            indicator_gradient = "#8b1a1a"
-            indicator_text = "🔴 HIGH RISK"
-            text_color = "white"
+            signal_color = "#dc3545"
+            signal_label = "HIGH RISK"
 
         st.markdown(f"""
-<div style="
-    background: linear-gradient(135deg, {indicator_gradient}, {indicator_color});
-    padding: 32px 20px;
-    border-radius: 16px;
-    text-align: center;
-    font-size: 2rem;
-    font-weight: 800;
-    color: {text_color};
-    box-shadow: 0 6px 24px rgba(0,0,0,0.45);
-    border: 1px solid rgba(255,255,255,0.1);
-    letter-spacing: 1px;">
-    {indicator_text} <br>
-    <span style="font-size:1.1rem; font-weight:400; opacity:0.85;">{round(success_probability)}% Confidence</span>
+<div style="display:flex; align-items:center; gap:10px; margin: 8px 0 16px 0;">
+  <div style="width:18px; height:18px; border-radius:50%; background:{signal_color};
+              box-shadow: 0 0 8px {signal_color}; flex-shrink:0;"></div>
+  <span style="font-size:0.95rem; font-weight:600; color:#C9D1D9;">
+    Sprint Health: <strong style="color:{signal_color};">{signal_label}</strong>
+    &nbsp;·&nbsp; {round(success_probability)}% Confidence
+  </span>
 </div>
 """, unsafe_allow_html=True)
 
