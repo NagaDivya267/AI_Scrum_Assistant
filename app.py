@@ -786,17 +786,6 @@ if df is not None:
         col3.metric("Remaining SP", metrics["remaining_sp"])
         col4.metric("Risk %", f"{metrics['risk']}%")
 
-        # --- RISK STATUS ---
-        st.subheader("📍 Current Sprint Risk Status")
-        status = get_risk_status(metrics["risk"])
-
-        if "High Risk" in status:
-            st.error(status)
-        elif "Medium Risk" in status:
-            st.warning(status)
-        else:
-            st.success(status)
-
         # --- BREAKDOWN ---
         st.subheader("📉 Risk Breakdown")
         b1, b2, b3, b4 = st.columns(4)
