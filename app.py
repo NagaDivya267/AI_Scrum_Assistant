@@ -748,25 +748,73 @@ if df is not None:
     
     # Tab 3: Metrics
     with tab3:
-        st.subheader("🤖 AI Sprint Health Advisor")
         current_sprint_df, current_sprint_name = get_current_sprint_df(df)
-
-        # --- SPRINT METRICS ---
-        st.markdown("### 📊 Sprint Metrics")
-
         completed_health_df = get_completed_sprint_health(df)
-
-        # --- METRICS ---
-        st.subheader(f"🚦 Current Sprint Health Status ({current_sprint_name})" if current_sprint_name else "🚦 Current Sprint Health Status")
         metrics = calculate_advanced_metrics(current_sprint_df, df)
 
+        # ── 1. CURRENT SPRINT HEALTH (top view) ──────────────────────────
+        st.subheader(f"🚦 Current Sprint Health ({current_sprint_name})" if current_sprint_name else "🚦 Current Sprint Health")
+
+        total_sp = metrics["total_sp"]
+        completed_sp = metrics["completed_sp"]
+        remaining_sp = metrics["remaining_sp"]
+
+        # Traffic signal
+        confidence_metrics_top = calculate_sprint_confidence(current_sprint_df, df)
+        velocity_metrics_top = get_velocity_metrics(df)
+        predicted_completion_sp_top = min(total_sp, completed_sp + velocity_metrics_top["avg_velocity"])
+        success_probability_top = (predicted_completion_sp_top / total_sp) * 100 if total_sp > 0 else 0
+
+        if success_probability_top >= 85:
+            sig_color = "#28a745"; sig_label = "ON TRACK"
+        elif success_probability_top >= 60:
+            sig_color = "#ffc107"; sig_label = "AT RISK"
+        else:
+            sig_color = "#dc3545"; sig_label = "HIGH RISK"
+
+        st.markdown(f"""
+<div style="display:flex; align-items:center; gap:10px; margin: 4px 0 12px 0;">
+  <div style="width:18px; height:18px; border-radius:50%; background:{sig_color};
+              box-shadow: 0 0 8px {sig_color}; flex-shrink:0;"></div>
+  <span style="font-size:0.95rem; font-weight:600; color:#C9D1D9;">
+    Sprint Health: <strong style="color:{sig_color};">{sig_label}</strong>
+    &nbsp;·&nbsp; {round(success_probability_top)}% Confidence
+  </span>
+</div>
+""", unsafe_allow_html=True)
+
+        # SP metric cards
         col1, col2, col3, col4 = st.columns(4)
         col1.metric("Total SP", metrics["total_sp"])
         col2.metric("Completed SP", metrics["completed_sp"])
         col3.metric("Remaining SP", metrics["remaining_sp"])
         col4.metric("Risk %", f"{metrics['risk']}%")
 
-        # --- CURRENT SPRINT SUMMARY (date-based burn rate) ---
+        # ── 2. PIE CHART — Committed / Completed / Remaining ─────────────
+        st.markdown("---")
+        import plotly.graph_objects as go
+        pie_fig = go.Figure(go.Pie(
+            labels=["Completed", "Remaining"],
+            values=[completed_sp, remaining_sp],
+            hole=0.5,
+            marker_colors=["#28a745", "#dc3545"],
+            textinfo="label+percent",
+            textfont_size=11,
+        ))
+        pie_fig.update_layout(
+            title_text=f"SP Distribution (Committed: {total_sp})",
+            title_font_size=13,
+            height=260,
+            margin=dict(t=40, b=10, l=10, r=10),
+            paper_bgcolor="rgba(0,0,0,0)",
+            showlegend=True,
+            legend=dict(font_size=10),
+        )
+        pie_col1, pie_col2, pie_col3 = st.columns([1, 2, 1])
+        with pie_col2:
+            st.plotly_chart(pie_fig, use_container_width=True)
+
+        # ── 3. CURRENT SPRINT SPILLOVER PREDICTION — line chart ──────────
         st.markdown("---")
         st.subheader("📅 Current Sprint Spillover Prediction")
 
@@ -785,110 +833,101 @@ if df is not None:
 
         remaining_sp_summary = max(0, committed_sp - completed_sp_summary)
         ideal_burn_rate = committed_sp / SPRINT_DURATION_DAYS if SPRINT_DURATION_DAYS > 0 else 0
-
         today = datetime.date.today()
         remaining_days = (SPRINT_END_DATE - today).days
-        if remaining_days > 0:
-            required_burn_rate = remaining_sp_summary / remaining_days
-        else:
-            required_burn_rate = remaining_sp_summary  # all remaining SP due today or overdue
-
+        required_burn_rate = remaining_sp_summary / remaining_days if remaining_days > 0 else remaining_sp_summary
         spillover_risk_pct = (todo_sp / committed_sp * 100) if committed_sp > 0 else 0
 
-        cs1, cs2, cs3, cs4, cs5 = st.columns(5)
-        cs1.metric("Committed SP", round(committed_sp))
-        cs2.metric("Ideal Burn Rate", f"{round(ideal_burn_rate)} SP/day")
-        cs3.metric("Completed SP", round(completed_sp_summary))
-        cs4.metric("Required Burn Rate", f"{round(required_burn_rate)} SP/day")
-        cs5.metric("Predictive Spillover Risk", f"{round(spillover_risk_pct)}%")
+        days_elapsed = SPRINT_DURATION_DAYS - max(0, remaining_days)
+        ideal_line = [committed_sp - ideal_burn_rate * d for d in range(SPRINT_DURATION_DAYS + 1)]
+        actual_line = [committed_sp] + [None] * SPRINT_DURATION_DAYS
+        for d in range(1, days_elapsed + 1):
+            burned = ideal_burn_rate * d
+            actual_line[d] = max(0, committed_sp - burned)
+        actual_line[days_elapsed] = remaining_sp_summary
 
+        day_labels = [f"D{d}" for d in range(SPRINT_DURATION_DAYS + 1)]
+        burn_fig = go.Figure()
+        burn_fig.add_trace(go.Scatter(
+            x=day_labels, y=ideal_line, mode="lines",
+            name="Ideal Burndown", line=dict(color="#6C63FF", dash="dash", width=2),
+        ))
+        burn_fig.add_trace(go.Scatter(
+            x=day_labels[:days_elapsed + 1],
+            y=[v for v in actual_line[:days_elapsed + 1] if v is not None],
+            mode="lines+markers", name="Actual Remaining",
+            line=dict(color="#00D4AA", width=2), marker=dict(size=5),
+        ))
+        burn_fig.update_layout(
+            height=220, margin=dict(t=20, b=20, l=10, r=10),
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+            legend=dict(font_size=10), xaxis=dict(showgrid=False),
+            yaxis=dict(showgrid=True, gridcolor="#1e293b", title="SP Remaining"),
+        )
+        st.plotly_chart(burn_fig, use_container_width=True)
         st.caption(
-            f"Sprint end: {SPRINT_END_DATE} | Sprint duration: {SPRINT_DURATION_DAYS} days | "
-            f"Remaining days: {max(0, remaining_days)} | Remaining SP: {round(remaining_sp_summary)}"
+            f"Sprint end: {SPRINT_END_DATE} | {SPRINT_DURATION_DAYS}-day sprint | "
+            f"Remaining days: {max(0, remaining_days)} | Remaining SP: {round(remaining_sp_summary)} | "
+            f"Required burn: {round(required_burn_rate, 1)} SP/day | Spillover risk: {round(spillover_risk_pct)}%"
         )
 
-        # --- PREDICTIVE KPIS ---
+        # ── 4. PREDICTIVE ANALYSIS ────────────────────────────────────────
         confidence_metrics = calculate_sprint_confidence(current_sprint_df, df)
         velocity_metrics = get_velocity_metrics(df)
 
-        total_sp = metrics["total_sp"]
-        completed_sp = metrics["completed_sp"]
-        remaining_sp = metrics["remaining_sp"]
         predicted_completion_sp = min(total_sp, completed_sp + velocity_metrics["avg_velocity"])
-
         success_probability = (predicted_completion_sp / total_sp) * 100 if total_sp > 0 else 0
         spillover_sp = max(0, total_sp - predicted_completion_sp)
 
         active_df = current_sprint_df
         blocked = len(active_df[active_df['Blocked'].astype(str).str.strip().str.lower() == 'yes'])
         not_started = len(active_df[active_df['Status'].astype(str).str.strip().str.lower() == 'to do'])
-
         remaining_pct = (remaining_sp / total_sp) * 100 if total_sp > 0 else 0
         blocked_pct = (blocked / len(active_df)) * 100 if len(active_df) > 0 else 0
         not_started_pct = (not_started / len(active_df)) * 100 if len(active_df) > 0 else 0
 
-        risk_index = (
-            0.4 * remaining_pct +
-            0.3 * blocked_pct +
-            0.3 * not_started_pct
-        )
-
+        risk_index = 0.4 * remaining_pct + 0.3 * blocked_pct + 0.3 * not_started_pct
         avg_predictability = completed_health_df["Predictability %"].mean() if not completed_health_df.empty else confidence_metrics["current_completion"]
-        confidence_score = (
-            0.5 * avg_predictability -
-            0.2 * blocked_pct -
-            0.2 * remaining_pct
-        )
+        confidence_score = 0.5 * avg_predictability - 0.2 * blocked_pct - 0.2 * remaining_pct
 
-        # --- PREDICTIVE ANALYSIS ---
         st.markdown("---")
         st.markdown("### 🔮 Predictive Analysis")
 
-        # 1. GAUGE CHART — big, instant understanding
-        st.subheader("🎯 Sprint Success Indicator")
-        import plotly.graph_objects as go
-
-        fig_gauge = go.Figure(go.Indicator(
-            mode="gauge+number",
-            value=success_probability,
-            title={'text': "Success Probability (%)"},
-            gauge={
-                'axis': {'range': [0, 100]},
-                'bar': {'color': "black"},
-                'steps': [
-                    {'range': [0, 60], 'color': "red"},
-                    {'range': [60, 85], 'color': "orange"},
-                    {'range': [85, 100], 'color': "green"},
-                ],
-                'threshold': {
-                    'line': {'color': "white", 'width': 4},
-                    'thickness': 0.75,
-                    'value': success_probability,
+        # Gauge — small, centered
+        gauge_col1, gauge_col2, gauge_col3 = st.columns([1.5, 2, 1.5])
+        with gauge_col2:
+            fig_gauge = go.Figure(go.Indicator(
+                mode="gauge+number",
+                value=success_probability,
+                title={'text': "Success Probability (%)", 'font': {'size': 12}},
+                number={'font': {'size': 28}},
+                gauge={
+                    'axis': {'range': [0, 100], 'tickfont': {'size': 9}},
+                    'bar': {'color': "black", 'thickness': 0.2},
+                    'steps': [
+                        {'range': [0, 60], 'color': "red"},
+                        {'range': [60, 85], 'color': "orange"},
+                        {'range': [85, 100], 'color': "green"},
+                    ],
+                    'threshold': {
+                        'line': {'color': "white", 'width': 3},
+                        'thickness': 0.75,
+                        'value': success_probability,
+                    },
                 },
-            },
-        ))
-        fig_gauge.update_layout(margin=dict(t=40, b=10, l=10, r=10), height=280, paper_bgcolor="rgba(0,0,0,0)")
-        st.plotly_chart(fig_gauge, use_container_width=True)
+            ))
+            fig_gauge.update_layout(margin=dict(t=30, b=5, l=10, r=10), height=200, paper_bgcolor="rgba(0,0,0,0)")
+            st.plotly_chart(fig_gauge, use_container_width=True)
 
-        # 2. KEY FORECAST METRICS — 3 clean tiles
+        # Key forecast metrics
         st.subheader("📊 Key Forecast Metrics")
         kf1, kf2, kf3 = st.columns(3)
+        kf1.metric("🚀 Forecasted Completion", f"{round(predicted_completion_sp, 1)} SP",
+                   delta=f"{round(predicted_completion_sp - total_sp, 1)} vs committed")
+        kf2.metric("⚠️ Risk Index", round(risk_index, 1))
+        kf3.metric("🎯 Confidence Score", f"{round(confidence_score, 1)}%")
 
-        kf1.metric(
-            "🚀 Forecasted Completion",
-            f"{round(predicted_completion_sp, 1)} SP",
-            delta=f"{round(predicted_completion_sp - total_sp, 1)} vs committed",
-        )
-        kf2.metric(
-            "⚠️ Risk Index",
-            round(risk_index, 1),
-        )
-        kf3.metric(
-            "🎯 Confidence Score",
-            f"{round(confidence_score, 1)}%",
-        )
-
-        # 3. FORECAST VS ACTUAL CHART
+        # Forecast vs Actual chart
         st.subheader("📈 Forecast vs Actual")
         chart_df = pd.DataFrame({
             "Metric": ["Committed", "Forecasted", "Completed"],
@@ -896,7 +935,7 @@ if df is not None:
         })
         st.bar_chart(chart_df.set_index("Metric"))
 
-        # 4. KEY INSIGHT — 1-line decision
+        # Key insight
         st.subheader("🧠 Key Insight")
         if success_probability > 85:
             st.success("🟢 Sprint is on track. Maintain current pace.")
@@ -905,81 +944,25 @@ if df is not None:
         else:
             st.error("🔴 High risk of spillover. Immediate intervention required.")
 
-        # 5. TRAFFIC SIGNAL
-        if success_probability >= 85:
-            signal_color = "#28a745"
-            signal_label = "ON TRACK"
-        elif success_probability >= 60:
-            signal_color = "#ffc107"
-            signal_label = "AT RISK"
-        else:
-            signal_color = "#dc3545"
-            signal_label = "HIGH RISK"
-
-        st.markdown(f"""
-<div style="display:flex; align-items:center; gap:10px; margin: 8px 0 16px 0;">
-  <div style="width:18px; height:18px; border-radius:50%; background:{signal_color};
-              box-shadow: 0 0 8px {signal_color}; flex-shrink:0;"></div>
-  <span style="font-size:0.95rem; font-weight:600; color:#C9D1D9;">
-    Sprint Health: <strong style="color:{signal_color};">{signal_label}</strong>
-    &nbsp;·&nbsp; {round(success_probability)}% Confidence
-  </span>
-</div>
-""", unsafe_allow_html=True)
-
-        # --- AI INSIGHTS ---
-        st.subheader("🧠 AI Recommendations")
-        if st.button("🚀 Generate Advisor Insights", key="generate_advisor_insights"):
-            insights = generate_ai_insights(current_sprint_df, full_df=df)
-            if insights:
-                st.session_state.ai_insights = insights
-
-        if "ai_insights" in st.session_state and st.session_state.ai_insights:
-            st.markdown(st.session_state.ai_insights)
-        else:
-            st.info("💡 Generate insights to see targeted Scrum Master recommendations.")
-
         # --- WHAT IF SIMULATION ---
+        st.markdown("---")
         st.subheader("🔮 What-If Analysis")
         extra_sp = st.slider("If additional SP completed:", 0, 30, 5)
 
-        # Current values
-        total_sp = metrics["total_sp"]
-        completed_sp = metrics["completed_sp"]
-        remaining_sp = metrics["remaining_sp"]
-
-        # --- Simulated completion ---
         sim_completed = completed_sp + extra_sp
         sim_remaining = max(0, total_sp - sim_completed)
-
-        # --- Predictability ---
         sim_predictability = (sim_completed / total_sp * 100) if total_sp > 0 else 0
-
-        # --- Spillover ---
         sim_spillover = (sim_remaining / total_sp * 100) if total_sp > 0 else 0
-
-        # --- Velocity impact ---
-        velocity_metrics = get_velocity_metrics(df)
         avg_velocity = velocity_metrics["avg_velocity"]
-
-        # How many sprints needed after simulation
         sprints_needed = sim_remaining / avg_velocity if avg_velocity > 0 else 0
+        sim_confidence = 0.5 * sim_predictability - 0.3 * sim_spillover
 
-        # --- Confidence Score ---
-        sim_confidence = (
-            0.5 * sim_predictability -
-            0.3 * sim_spillover
-        )
-
-        # --- UI Output ---
         c1, c2, c3, c4 = st.columns(4)
-
         c1.metric("📈 Predictability", f"{round(sim_predictability)}%")
         c2.metric("📉 Spillover Risk", f"{round(sim_spillover)}%")
         c3.metric("⚡ Sprints Needed", f"{round(sprints_needed, 1)}")
         c4.metric("🎯 Confidence", f"{round(sim_confidence)}%")
 
-        # --- Insight ---
         if sim_spillover > 30:
             st.error("🔴 High spillover risk even after improvement")
         elif sim_spillover > 15:
